@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { db } from '../lib/firebase';
-import { collection, query, where, getDocs } from 'firebase/firestore';
+import { collection, query, where, onSnapshot } from 'firebase/firestore';
+import { handleFirestoreError, OperationType } from '../lib/firestoreErrors';
 import { format } from 'date-fns';
 import { ChefHat } from 'lucide-react';
 
@@ -13,34 +14,33 @@ export default function CocineroView() {
   const [loading, setLoading] = useState(false);
 
   useEffect(() => {
-    const fetchCounts = async () => {
-      setLoading(true);
-      try {
-        const q = query(collection(db, 'reservations'), where('date', '==', selectedDate));
-        const snap = await getDocs(q);
-        
-        const newCounts = {
-          almuerzo: { casino: 0, rancho: 0 },
-          cena: { casino: 0, rancho: 0 }
-        };
+    setLoading(true);
+    const q = query(collection(db, 'reservations'), where('date', '==', selectedDate));
+    
+    const unsubscribe = onSnapshot(q, (snap) => {
+      const newCounts = {
+        almuerzo: { casino: 0, rancho: 0 },
+        cena: { casino: 0, rancho: 0 }
+      };
 
-        snap.docs.forEach(doc => {
-          const data = doc.data();
-          if (data.meal === 'almuerzo' || data.meal === 'cena') {
-            if (data.menuType === 'casino' || data.menuType === 'rancho') {
-              newCounts[data.meal][data.menuType]++;
-            }
+      snap.docs.forEach(doc => {
+        const data = doc.data();
+        if (data.meal === 'almuerzo' || data.meal === 'cena') {
+          if (data.menuType === 'casino' || data.menuType === 'rancho') {
+            newCounts[data.meal][data.menuType]++;
           }
-        });
+        }
+      });
 
-        setCounts(newCounts);
-      } catch (error) {
-        console.error("Error fetching counts:", error);
-      } finally {
-        setLoading(false);
-      }
-    };
-    fetchCounts();
+      setCounts(newCounts);
+      setLoading(false);
+    }, (error) => {
+      console.error("Error fetching counts:", error);
+      handleFirestoreError(error, OperationType.GET, 'reservations');
+      setLoading(false);
+    });
+
+    return () => unsubscribe();
   }, [selectedDate]);
 
   return (

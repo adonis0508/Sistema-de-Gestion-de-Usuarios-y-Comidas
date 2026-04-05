@@ -1,17 +1,26 @@
 import React, { useEffect, useState } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { db } from '../lib/firebase';
-import { collection, query, where, getDocs, addDoc, deleteDoc, doc } from 'firebase/firestore';
+import { collection, query, where, onSnapshot, addDoc, deleteDoc, doc } from 'firebase/firestore';
 import { format, parseISO, startOfWeek, addDays } from 'date-fns';
 import { es } from 'date-fns/locale';
-import { Clock, Utensils, AlertTriangle, CheckCircle2, Calendar, ChevronLeft, ChevronRight } from 'lucide-react';
+import { Clock, Utensils, AlertTriangle, CheckCircle2, Calendar, ChevronLeft, ChevronRight, X } from 'lucide-react';
+import toast from 'react-hot-toast';
 import { handleFirestoreError, OperationType } from '../lib/firestoreErrors';
 
 export default function ComensalView() {
   const { profile } = useAuth();
   
   const todayStr = format(new Date(), 'yyyy-MM-dd');
-  const currentHour = new Date().getHours();
+  const [currentHour, setCurrentHour] = useState(new Date().getHours());
+
+  // Actualizar la hora en tiempo real cada minuto para el bloqueo de las 10:00 AM
+  useEffect(() => {
+    const timer = setInterval(() => {
+      setCurrentHour(new Date().getHours());
+    }, 60000);
+    return () => clearInterval(timer);
+  }, []);
 
   // Start the week on Monday (weekStartsOn: 1)
   const [currentWeekStart, setCurrentWeekStart] = useState(() => startOfWeek(new Date(), { weekStartsOn: 1 }));
@@ -19,94 +28,113 @@ export default function ComensalView() {
   const [menus, setMenus] = useState<Record<string, any>>({});
   const [reservations, setReservations] = useState<Record<string, any[]>>({});
   const [loading, setLoading] = useState(true);
+  const [showReminder, setShowReminder] = useState(false);
 
   // Generate array of 7 dates for the current week view
   const weekDates = Array.from({ length: 7 }).map((_, i) => format(addDays(currentWeekStart, i), 'yyyy-MM-dd'));
 
   useEffect(() => {
-    const fetchData = async () => {
-      if (!profile) return;
-      setLoading(true);
-      try {
-        // Fetch menus for the entire week
-        const menuQ = query(collection(db, 'menus'), where('date', 'in', weekDates));
-        const menuSnap = await getDocs(menuQ);
-        const menusData: Record<string, any> = {};
-        menuSnap.forEach(d => {
-          const data = d.data();
-          const parseMenu = (menuData: any) => {
-            if (typeof menuData === 'string') return { principal: menuData, bebida: '', postre: '' };
-            if (typeof menuData === 'object' && menuData !== null) return { 
-              principal: menuData.principal || '', 
-              bebida: menuData.bebida || '', 
-              postre: menuData.postre || '' 
-            };
-            return { principal: '', bebida: '', postre: '' };
-          };
-          
-          menusData[data.date] = {
-            ...data,
-            casinoMenuAlmuerzo: parseMenu(data.casinoMenuAlmuerzo || data.casinoMenu),
-            casinoMenuCena: parseMenu(data.casinoMenuCena || data.casinoMenu)
-          };
-        });
-        setMenus(menusData);
+    if (!profile) return;
+    setLoading(true);
 
-        // Fetch user's reservations for the entire week
-        const resQ = query(
-          collection(db, 'reservations'),
-          where('userId', '==', profile.uid),
-          where('date', 'in', weekDates)
-        );
-        const resSnap = await getDocs(resQ);
-        const resData: Record<string, any[]> = {};
-        resSnap.forEach(d => {
-          const data = d.data();
-          if (!resData[data.date]) resData[data.date] = [];
-          resData[data.date].push({ id: d.id, ...data });
-        });
-        setReservations(resData);
-      } catch (error) {
-        console.error("Error fetching data:", error);
-        handleFirestoreError(error, OperationType.GET, 'menus/reservations');
-      } finally {
-        setLoading(false);
-      }
+    // Fetch menus for the entire week
+    const menuQ = query(collection(db, 'menus'), where('date', 'in', weekDates));
+    const unsubscribeMenus = onSnapshot(menuQ, (menuSnap) => {
+      const menusData: Record<string, any> = {};
+      menuSnap.forEach(d => {
+        const data = d.data();
+        const parseMenu = (menuData: any) => {
+          if (typeof menuData === 'string') return { principal: menuData, bebida: '', postre: '' };
+          if (typeof menuData === 'object' && menuData !== null) return { 
+            principal: menuData.principal || '', 
+            bebida: menuData.bebida || '', 
+            postre: menuData.postre || '' 
+          };
+          return { principal: '', bebida: '', postre: '' };
+        };
+        
+        menusData[data.date] = {
+          ...data,
+          casinoMenuAlmuerzo: parseMenu(data.casinoMenuAlmuerzo || data.casinoMenu),
+          casinoMenuCena: parseMenu(data.casinoMenuCena || data.casinoMenu)
+        };
+      });
+      
+      setMenus(prev => ({ ...prev, ...menusData }));
+    }, (error) => {
+      console.error("Error fetching menus:", error);
+      handleFirestoreError(error, OperationType.GET, 'menus');
+    });
+
+    // Fetch user's reservations for the entire week
+    const resQ = query(
+      collection(db, 'reservations'),
+      where('userId', '==', profile.uid),
+      where('date', 'in', weekDates)
+    );
+    const unsubscribeRes = onSnapshot(resQ, (resSnap) => {
+      const resData: Record<string, any[]> = {};
+      resSnap.forEach(d => {
+        const data = d.data();
+        if (!resData[data.date]) resData[data.date] = [];
+        resData[data.date].push({ id: d.id, ...data });
+      });
+      setReservations(resData);
+      setLoading(false);
+    }, (error) => {
+      console.error("Error fetching reservations:", error);
+      handleFirestoreError(error, OperationType.GET, 'reservations');
+      setLoading(false);
+    });
+
+    return () => {
+      unsubscribeMenus();
+      unsubscribeRes();
     };
-    fetchData();
   }, [profile, currentWeekStart]); // Re-fetch when week changes
 
-  // Recordatorio de límite de hora (09:00 AM)
+  // Recordatorio de límite de hora (08:00 AM - 10:00 AM)
   useEffect(() => {
-    if (!profile) return;
+    if (!profile || loading) return;
 
     const checkDeadline = () => {
       const now = new Date();
-      // Si son las 09:00 AM y el usuario no tiene reservas para hoy
-      if (now.getHours() === 9 && now.getMinutes() === 0) {
+      const hour = now.getHours();
+      
+      // Si entra entre las 08:00 y las 10:00 AM
+      if (hour >= 8 && hour < 10) {
         const todayRes = reservations[todayStr] || [];
         if (todayRes.length === 0) {
-          if ('Notification' in window && Notification.permission === 'granted') {
-            new Notification('Recordatorio de Casino', { 
-              body: 'Falta 1 hora para el cierre de inscripciones del menú de hoy. ¡Anota tu comida!',
-              icon: '/DEf.png'
-            });
+          const reminderKey = `reminder_shown_${todayStr}`;
+          if (!localStorage.getItem(reminderKey)) {
+            setShowReminder(true);
+            // También intentar notificación push si está permitida
+            if ('Notification' in window && Notification.permission === 'granted') {
+              new Notification('Recordatorio de Casino', { 
+                body: 'Recuerda que las inscripciones cierran a las 10:00 AM. ¡Anota tu comida!',
+                icon: '/DEf.png'
+              });
+            }
           }
         }
       }
     };
 
-    // Revisar cada minuto
-    const interval = setInterval(checkDeadline, 60000);
-    
-    // Ejecutar una vez al montar por si justo entra a las 09:00
     checkDeadline();
+  }, [profile, reservations, loading, todayStr]);
 
-    return () => clearInterval(interval);
-  }, [profile, reservations, todayStr]);
+  const dismissReminder = () => {
+    localStorage.setItem(`reminder_shown_${todayStr}`, 'true');
+    setShowReminder(false);
+  };
 
   const handleReserve = async (date: string, meal: 'almuerzo' | 'cena', menuType: 'casino' | 'rancho') => {
     if (!profile) return;
+    
+    if (!navigator.onLine) {
+      toast.success('Estás sin conexión. La reserva se guardará cuando recuperes la señal.', { duration: 4000 });
+    }
+
     try {
       const newRes = {
         userId: profile.uid,
@@ -117,29 +145,33 @@ export default function ComensalView() {
         attended: false,
         createdAt: new Date().toISOString()
       };
-      const docRef = await addDoc(collection(db, 'reservations'), newRes);
       
-      setReservations(prev => {
-        const dayRes = prev[date] || [];
-        return { ...prev, [date]: [...dayRes, { id: docRef.id, ...newRes }] };
-      });
+      // No hacemos await si estamos offline para no bloquear la UI, 
+      // Firestore actualizará la caché local inmediatamente y onSnapshot hará el resto.
+      const promise = addDoc(collection(db, 'reservations'), newRes);
+      if (navigator.onLine) {
+        await promise;
+      }
     } catch (error) {
       console.error("Error reserving:", error);
-      alert("Error al registrar la reserva.");
+      toast.error("Error al registrar la reserva.");
       handleFirestoreError(error, OperationType.CREATE, 'reservations');
     }
   };
 
   const handleCancel = async (date: string, id: string) => {
+    if (!navigator.onLine) {
+      toast.success('Estás sin conexión. La cancelación se sincronizará luego.', { duration: 4000 });
+    }
+
     try {
-      await deleteDoc(doc(db, 'reservations', id));
-      setReservations(prev => {
-        const dayRes = prev[date] || [];
-        return { ...prev, [date]: dayRes.filter(r => r.id !== id) };
-      });
+      const promise = deleteDoc(doc(db, 'reservations', id));
+      if (navigator.onLine) {
+        await promise;
+      }
     } catch (error) {
       console.error("Error cancelling:", error);
-      alert("Error al cancelar la reserva.");
+      toast.error("Error al cancelar la reserva.");
       handleFirestoreError(error, OperationType.DELETE, `reservations/${id}`);
     }
   };
@@ -150,6 +182,22 @@ export default function ComensalView() {
 
   return (
     <div className="space-y-6 px-4 sm:px-0 pb-10">
+      {/* Visual Alert Reminder */}
+      {showReminder && (
+        <div className="bg-yellow-500/10 border border-yellow-500/50 rounded-lg p-4 flex items-start justify-between">
+          <div className="flex items-start">
+            <AlertTriangle className="h-5 w-5 text-yellow-500 mt-0.5 mr-3 flex-shrink-0" />
+            <div>
+              <h3 className="text-yellow-500 font-bold uppercase tracking-wider text-sm">¡Recordatorio Importante!</h3>
+              <p className="text-slate-300 text-sm mt-1">Aún no te has anotado para el menú de hoy. Recuerda que las inscripciones cierran a las 10:00 AM.</p>
+            </div>
+          </div>
+          <button onClick={dismissReminder} className="text-slate-400 hover:text-white transition-colors p-1">
+            <X className="h-5 w-5" />
+          </button>
+        </div>
+      )}
+
       {/* Header & Navigation */}
       <div className="bg-slate-800 rounded-lg shadow-lg border border-slate-700 overflow-hidden p-4 flex flex-col sm:flex-row justify-between items-center gap-4">
         <h2 className="text-xl font-bold text-white uppercase tracking-wider flex items-center">

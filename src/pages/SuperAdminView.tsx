@@ -1,68 +1,39 @@
 import React, { useState, useEffect } from 'react';
 import { db } from '../lib/firebase';
-import { collection, query, where, getDocs, doc, updateDoc } from 'firebase/firestore';
-import { ShieldAlert, UserCog, FileText, Download } from 'lucide-react';
+import { collection, onSnapshot, doc, updateDoc } from 'firebase/firestore';
+import { ShieldAlert, UserCog, ExternalLink } from 'lucide-react';
+import { Link } from 'react-router-dom';
 import { Role } from '../types';
-import { format } from 'date-fns';
-import { exportToPDF, exportToExcel } from '../lib/exportUtils';
+import toast from 'react-hot-toast';
 import { handleFirestoreError, OperationType } from '../lib/firestoreErrors';
+import ExportPanel from '../components/ExportPanel';
 
 export default function SuperAdminView() {
   const [users, setUsers] = useState<any[]>([]);
   const [loading, setLoading] = useState(false);
-  const [exportDate, setExportDate] = useState(format(new Date(), 'yyyy-MM-dd'));
-  const [exporting, setExporting] = useState(false);
 
   useEffect(() => {
-    const fetchUsers = async () => {
-      setLoading(true);
-      try {
-        const snap = await getDocs(collection(db, 'users'));
-        setUsers(snap.docs.map(d => ({ id: d.id, ...d.data() })));
-      } catch (error) {
-        console.error("Error fetching users:", error);
-        handleFirestoreError(error, OperationType.GET, 'users');
-      } finally {
-        setLoading(false);
-      }
-    };
-    fetchUsers();
+    setLoading(true);
+    const unsubscribe = onSnapshot(collection(db, 'users'), (snap) => {
+      setUsers(snap.docs.map(d => ({ id: d.id, ...d.data() })));
+      setLoading(false);
+    }, (error) => {
+      console.error("Error fetching users:", error);
+      handleFirestoreError(error, OperationType.GET, 'users');
+      setLoading(false);
+    });
+
+    return () => unsubscribe();
   }, []);
 
   const handleRoleChange = async (userId: string, newRole: Role) => {
     try {
       await updateDoc(doc(db, 'users', userId), { role: newRole });
-      setUsers(users.map(u => u.id === userId ? { ...u, role: newRole } : u));
+      toast.success("Rol actualizado exitosamente.");
     } catch (error) {
       console.error("Error updating role:", error);
-      alert("Error al actualizar el rol.");
+      toast.error("Error al actualizar el rol.");
       handleFirestoreError(error, OperationType.UPDATE, `users/${userId}`);
-    }
-  };
-
-  const handleExport = async (type: 'pdf' | 'excel') => {
-    setExporting(true);
-    try {
-      const q = query(collection(db, 'reservations'), where('date', '==', exportDate));
-      const snap = await getDocs(q);
-      const reservations = snap.docs.map(d => ({ id: d.id, ...d.data() }));
-      
-      if (reservations.length === 0) {
-        alert('No hay reservas para la fecha seleccionada.');
-        return;
-      }
-
-      if (type === 'pdf') {
-        exportToPDF(exportDate, reservations);
-      } else {
-        exportToExcel(exportDate, reservations);
-      }
-    } catch (error) {
-      console.error("Error exporting data:", error);
-      alert('Error al exportar los datos.');
-      handleFirestoreError(error, OperationType.GET, 'reservations');
-    } finally {
-      setExporting(false);
     }
   };
 
@@ -77,36 +48,29 @@ export default function SuperAdminView() {
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
         {/* Exportar Planillas */}
+        <ExportPanel />
+
+        {/* Accesos Rápidos */}
         <div className="bg-slate-800 rounded-lg shadow-lg border border-slate-700 overflow-hidden">
           <div className="bg-blue-950 px-6 py-4 border-b border-yellow-600/30 flex items-center">
-            <FileText className="mr-2 h-5 w-5 text-yellow-500" />
-            <h3 className="text-lg font-bold text-white uppercase tracking-wider">Exportar Planillas</h3>
+            <ExternalLink className="mr-2 h-5 w-5 text-yellow-500" />
+            <h3 className="text-lg font-bold text-white uppercase tracking-wider">Accesos Rápidos</h3>
           </div>
           <div className="p-6 space-y-4">
-            <div>
-              <label className="block text-sm font-medium text-slate-300 mb-1">Fecha de la Planilla</label>
-              <input
-                type="date"
-                value={exportDate}
-                onChange={(e) => setExportDate(e.target.value)}
-                className="w-full bg-slate-900 border border-slate-600 text-white px-3 py-2 rounded focus:outline-none focus:border-yellow-500"
-              />
-            </div>
-            <div className="flex gap-3">
-              <button
-                onClick={() => handleExport('pdf')}
-                disabled={exporting}
-                className="flex-1 flex items-center justify-center py-2 px-4 bg-red-600 hover:bg-red-500 text-white font-bold rounded transition-colors disabled:opacity-50 uppercase text-xs tracking-wider"
-              >
-                <Download className="w-4 h-4 mr-2" /> PDF
-              </button>
-              <button
-                onClick={() => handleExport('excel')}
-                disabled={exporting}
-                className="flex-1 flex items-center justify-center py-2 px-4 bg-green-600 hover:bg-green-500 text-white font-bold rounded transition-colors disabled:opacity-50 uppercase text-xs tracking-wider"
-              >
-                <Download className="w-4 h-4 mr-2" /> Excel
-              </button>
+            <p className="text-slate-400 text-sm">Como Superadmin, tienes permisos para acceder a todas las vistas operativas:</p>
+            <div className="flex flex-col gap-3">
+              <Link to="/admin-mesa" className="inline-flex items-center justify-center px-4 py-3 border border-red-600/50 text-red-400 hover:bg-red-600/10 rounded transition-colors uppercase text-sm font-bold tracking-wider">
+                Vista Admin Mesa <ExternalLink className="ml-2 h-4 w-4" />
+              </Link>
+              <Link to="/comensal" className="inline-flex items-center justify-center px-4 py-3 border border-yellow-600/50 text-yellow-500 hover:bg-yellow-600/10 rounded transition-colors uppercase text-sm font-bold tracking-wider">
+                Vista Comensal <ExternalLink className="ml-2 h-4 w-4" />
+              </Link>
+              <Link to="/mozo" className="inline-flex items-center justify-center px-4 py-3 border border-slate-600 text-slate-300 hover:bg-slate-700 rounded transition-colors uppercase text-sm font-bold tracking-wider">
+                Vista Mozo <ExternalLink className="ml-2 h-4 w-4" />
+              </Link>
+              <Link to="/cocina" className="inline-flex items-center justify-center px-4 py-3 border border-slate-600 text-slate-300 hover:bg-slate-700 rounded transition-colors uppercase text-sm font-bold tracking-wider">
+                Vista Cocina <ExternalLink className="ml-2 h-4 w-4" />
+              </Link>
             </div>
           </div>
         </div>

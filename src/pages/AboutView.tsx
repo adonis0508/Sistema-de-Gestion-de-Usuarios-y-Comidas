@@ -1,5 +1,5 @@
 import React from 'react';
-import { Info, MessageCircle, Bug, Lightbulb, Facebook } from 'lucide-react';
+import { Info, MessageCircle, Bug, Lightbulb, Facebook, Linkedin, Github } from 'lucide-react';
 
 export default function AboutView() {
   const whatsappNumber = "542216828422";
@@ -17,10 +17,11 @@ export default function AboutView() {
         <div className="p-6 space-y-6">
           <div className="text-center space-y-2">
             <div className="flex justify-center mb-4">
-              <img src="/DEf.png" alt="Agr Com 601" className="h-20 w-20 object-contain drop-shadow-lg" />
+              <img src="/DEf.png" alt="Agr Com 601" className="h-[92px] w-[92px] object-contain drop-shadow-lg" />
             </div>
             <h3 className="text-lg font-bold text-white uppercase tracking-wider">Sistema de Gestión - Casino de Oficiales</h3>
             <p className="text-yellow-500 text-sm font-bold tracking-widest uppercase">Agrupación de Comunicaciones 601</p>
+            <p className="text-slate-400 text-xs mt-2">Versión 0.04.26</p>
           </div>
 
           <div className="bg-slate-900/50 p-6 rounded-lg border border-slate-700 space-y-4">
@@ -31,14 +32,19 @@ export default function AboutView() {
             <div className="space-y-4 text-slate-300 text-sm">
               <p>Si el usuario encuentra algún error en el sistema o tiene sugerencias para mejorar la aplicación, puede comunicarse directamente con el desarrollador a través de los siguientes medios.</p>
               
-              <div className="bg-slate-800 p-4 rounded border border-slate-600 space-y-3">
-                <div className="flex flex-col sm:flex-row sm:items-center">
-                  <span className="font-bold text-slate-400 uppercase tracking-wider text-xs sm:w-32 mb-1 sm:mb-0">Desarrollador:</span>
-                  <span className="text-white font-bold">ST Angel Adonis LLANOS</span>
+              <div className="bg-slate-800 p-4 rounded border border-slate-600 flex flex-col-reverse sm:flex-row items-center gap-6">
+                <div className="space-y-4 flex-1 w-full flex flex-col justify-center">
+                  <div className="flex flex-col sm:flex-row sm:items-center">
+                    <span className="font-bold text-slate-400 uppercase tracking-wider text-xs sm:w-36 mb-1 sm:mb-0 flex-shrink-0">Desarrollador:</span>
+                    <span className="text-white font-bold text-sm sm:text-base">ST Angel Adonis LLANOS</span>
+                  </div>
+                  <div className="flex flex-col sm:flex-row sm:items-center">
+                    <span className="font-bold text-slate-400 uppercase tracking-wider text-xs sm:w-36 mb-1 sm:mb-0 flex-shrink-0">Unidad:</span>
+                    <span className="text-white font-bold text-sm sm:text-base leading-snug">Batallón de Guerra Electrónica y Ciberdefensa 601</span>
+                  </div>
                 </div>
-                <div className="flex flex-col sm:flex-row sm:items-center">
-                  <span className="font-bold text-slate-400 uppercase tracking-wider text-xs sm:w-32 mb-1 sm:mb-0">WhatsApp:</span>
-                  <span className="text-white font-bold">+54 9 221 682-8422</span>
+                <div className="flex-shrink-0">
+                  <img src="/BGEYCD601.png" alt="Escudo BGEYCD 601" className="h-[110px] w-[110px] object-contain drop-shadow-lg" />
                 </div>
               </div>
             </div>
@@ -61,6 +67,24 @@ export default function AboutView() {
               >
                 <Facebook className="mr-2 h-5 w-5" />
                 Contactar por Facebook
+              </a>
+              <a 
+                href="https://www.linkedin.com/in/angel-adonis-llanos/"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="w-full flex items-center justify-center px-4 py-3 bg-[#0A66C2] hover:bg-[#004182] text-white font-bold rounded-md transition-colors uppercase tracking-wider text-sm shadow-lg shadow-blue-900/20"
+              >
+                <Linkedin className="mr-2 h-5 w-5" />
+                Perfil de LinkedIn
+              </a>
+              <a 
+                href="https://github.com/adonis0508/Sistema-de-Gestion-de-Usuarios-y-Comidas"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="w-full flex items-center justify-center px-4 py-3 bg-[#24292e] hover:bg-[#1b1f23] text-white font-bold rounded-md transition-colors uppercase tracking-wider text-sm shadow-lg shadow-slate-900/20"
+              >
+                <Github className="mr-2 h-5 w-5" />
+                Repositorio en GitHub
               </a>
             </div>
           </div>

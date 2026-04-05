@@ -1,6 +1,6 @@
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
-import * as XLSX from 'xlsx';
+import * as XLSX from 'xlsx-js-style';
 import { format, parseISO } from 'date-fns';
 import { es } from 'date-fns/locale';
 
@@ -10,9 +10,17 @@ function parseName(fullName: string) {
   
   const lowerParts = parts.map(p => p.toLowerCase());
   let gradoTokens = 0;
-  if (lowerParts[0] === 'tte' && lowerParts[1] === '1ro') gradoTokens = 2;
-  else if (['tte', 'cap', 'my', 'tcnl', 'cnl', 'gral', 'subt', 'subof', 'sarg', 'cabo', 'vol', 'cdte'].includes(lowerParts[0])) gradoTokens = 1;
+  const knownRanks = ['tte', 'cap', 'my', 'tcnl', 'cnl', 'gral', 'subt', 'subof', 'sarg', 'cabo', 'vol', 'cdte'];
   
+  if (lowerParts[0] === 'tte' && lowerParts[1] === '1ro') gradoTokens = 2;
+  else if (knownRanks.includes(lowerParts[0])) gradoTokens = 1;
+  
+  if (gradoTokens === 0) {
+    const apellido = parts[parts.length - 1].toUpperCase();
+    const nombre = parts.slice(0, parts.length - 1).join(' ');
+    return { grado: '', nombre, apellido };
+  }
+
   const grado = parts.slice(0, gradoTokens).join(' ');
   const apellido = parts[parts.length - 1].toUpperCase();
   const nombre = parts.slice(gradoTokens, parts.length - 1).join(' ');
@@ -65,8 +73,9 @@ export function exportToPDF(date: string, reservations: any[]) {
 
   // Header Texts
   doc.setFontSize(10);
-  doc.setFont("helvetica", "italic");
+  doc.setFont("helvetica", "bolditalic");
   doc.text("Ejército Argentino", 14, 15);
+  doc.setFont("helvetica", "italic");
   doc.text("Agrupación de Comunicaciones 601", 14, 20);
   
   doc.setFont("helvetica", "normal");
@@ -74,7 +83,10 @@ export function exportToPDF(date: string, reservations: any[]) {
 
   doc.setFontSize(12);
   doc.setFont("helvetica", "bold");
-  doc.text("Casino de Oficiales - GECB", 105, 30, { align: 'center' });
+  const title = "Casino de Oficiales - GECB";
+  doc.text(title, 105, 30, { align: 'center' });
+  const textWidth = doc.getTextWidth(title);
+  doc.line(105 - textWidth / 2, 31, 105 + textWidth / 2, 31);
   
   // Table
   let sum_ac = 0, sum_ac_p = 0;
@@ -105,7 +117,7 @@ export function exportToPDF(date: string, reservations: any[]) {
     ];
   });
 
-  const tableFoot = [
+  const tableFoot: any[] = [
     [
       { content: 'TOTAL', colSpan: 4, styles: { halign: 'center', fontStyle: 'bold' } },
       sum_ac.toString(),
@@ -190,7 +202,7 @@ export function exportToExcel(date: string, reservations: any[]) {
     [],
     ["", "", "", "Casino de Oficiales - GECB"],
     [`Reporte ${formattedDate}`],
-    ["Nro", "Grado", "Nombre", "APELLIDO", "Almuerzo Casino", "P/A", "Cena Casino", "P/A", "Almuerzo Rancho", "P/A", "Cena Rancho", "P/A"],
+    ["Nro", "Grado", "Nombre", "APELLIDO", "Almuerzo\nCasino", "P/A", "Cena\nCasino", "P/A", "Almuerzo\nRancho", "P/A", "Cena\nRancho", "P/A"],
     ...tableBody,
     ["TOTAL", "", "", "", sum_ac, sum_ac_p, sum_cc, sum_cc_p, sum_ar, sum_ar_p, sum_cr, sum_cr_p],
     [],
@@ -198,6 +210,101 @@ export function exportToExcel(date: string, reservations: any[]) {
   ];
 
   const ws = XLSX.utils.aoa_to_sheet(wsData);
+  
+  // Apply styles
+  for (const cell in ws) {
+    if (cell[0] === '!') continue;
+    
+    const col = cell.replace(/[0-9]/g, '');
+    const row = parseInt(cell.replace(/[^0-9]/g, ''));
+    
+    ws[cell].s = {
+      font: { name: "Arial", sz: 10 },
+      alignment: { vertical: "center", horizontal: "center" }
+    };
+    
+    // Header texts
+    if (row === 1 && col === 'A') {
+      ws[cell].s.font = { name: "Arial", sz: 10, italic: true, bold: true };
+      ws[cell].s.alignment = { horizontal: "left" };
+    }
+    if (row === 2 && col === 'A') {
+      ws[cell].s.font = { name: "Arial", sz: 10, italic: true };
+      ws[cell].s.alignment = { horizontal: "left" };
+    }
+    if (row === 1 && col === 'I') {
+      ws[cell].s.font = { name: "Arial", sz: 10 };
+      ws[cell].s.alignment = { horizontal: "right" };
+    }
+    if (row === 4 && col === 'D') {
+      ws[cell].s.font = { name: "Arial", sz: 12, bold: true, underline: true };
+      ws[cell].s.alignment = { horizontal: "center" };
+    }
+    
+    // Table Header (Reporte DD Mmm AA)
+    if (row === 5) {
+      ws[cell].s.font = { name: "Arial", sz: 10, bold: true };
+      ws[cell].s.alignment = { horizontal: "center", vertical: "center" };
+      ws[cell].s.border = {
+        top: { style: "thin", color: { auto: 1 } },
+        bottom: { style: "thin", color: { auto: 1 } },
+        left: { style: "thin", color: { auto: 1 } },
+        right: { style: "thin", color: { auto: 1 } }
+      };
+    }
+    
+    // Table Columns Header
+    if (row === 6) {
+      ws[cell].s.font = { name: "Arial", sz: 10, bold: true };
+      ws[cell].s.alignment = { horizontal: "center", vertical: "center", wrapText: true };
+      ws[cell].s.border = {
+        top: { style: "thin", color: { auto: 1 } },
+        bottom: { style: "thin", color: { auto: 1 } },
+        left: { style: "thin", color: { auto: 1 } },
+        right: { style: "thin", color: { auto: 1 } }
+      };
+    }
+    
+    // Table Body
+    if (row > 6 && row <= 6 + rows.length) {
+      ws[cell].s.border = {
+        top: { style: "thin", color: { auto: 1 } },
+        bottom: { style: "thin", color: { auto: 1 } },
+        left: { style: "thin", color: { auto: 1 } },
+        right: { style: "thin", color: { auto: 1 } }
+      };
+      if (['B', 'C', 'D'].includes(col)) {
+        ws[cell].s.alignment = { horizontal: "left", vertical: "center" };
+      }
+    }
+    
+    // Table Footer (TOTAL)
+    if (row === 7 + rows.length) {
+      ws[cell].s.font = { name: "Arial", sz: 10, bold: true };
+      ws[cell].s.border = {
+        top: { style: "thin", color: { auto: 1 } },
+        bottom: { style: "thin", color: { auto: 1 } },
+        left: { style: "thin", color: { auto: 1 } },
+        right: { style: "thin", color: { auto: 1 } }
+      };
+    }
+  }
+
+  // Set column widths
+  ws['!cols'] = [
+    { wch: 5 },  // Nro
+    { wch: 10 }, // Grado
+    { wch: 20 }, // Nombre
+    { wch: 20 }, // APELLIDO
+    { wch: 10 }, // Almuerzo Casino
+    { wch: 5 },  // P/A
+    { wch: 10 }, // Cena Casino
+    { wch: 5 },  // P/A
+    { wch: 10 }, // Almuerzo Rancho
+    { wch: 5 },  // P/A
+    { wch: 10 }, // Cena Rancho
+    { wch: 5 }   // P/A
+  ];
   
   // Merge cells
   ws['!merges'] = [

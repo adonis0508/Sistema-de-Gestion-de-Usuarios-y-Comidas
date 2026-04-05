@@ -1,10 +1,12 @@
 import React, { useState, useEffect } from 'react';
 import { db } from '../lib/firebase';
-import { collection, query, where, getDocs, updateDoc, doc } from 'firebase/firestore';
+import { collection, query, where, onSnapshot, updateDoc, doc } from 'firebase/firestore';
 import { format } from 'date-fns';
-import { CheckSquare, Square, Users, Search, Download } from 'lucide-react';
-import { exportToPDF, exportToExcel } from '../lib/exportUtils';
+import { CheckSquare, Square, Users, Download } from 'lucide-react';
+import toast from 'react-hot-toast';
 import { handleFirestoreError, OperationType } from '../lib/firestoreErrors';
+import SearchBar from '../components/SearchBar';
+import FilterTabs from '../components/FilterTabs';
 
 export default function MozoView() {
   const [selectedDate, setSelectedDate] = useState(format(new Date(), 'yyyy-MM-dd'));
@@ -12,28 +14,33 @@ export default function MozoView() {
   const [loading, setLoading] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedMeal, setSelectedMeal] = useState<'almuerzo' | 'cena'>('almuerzo');
+  const [filterType, setFilterType] = useState<'all' | 'casino' | 'rancho' | 'pending'>('all');
 
   useEffect(() => {
-    const fetchReservations = async () => {
-      setLoading(true);
-      try {
-        const q = query(collection(db, 'reservations'), where('date', '==', selectedDate));
-        const snap = await getDocs(q);
-        setReservations(snap.docs.map(d => ({ id: d.id, ...d.data() })));
-      } catch (error) {
-        console.error("Error fetching reservations:", error);
-        handleFirestoreError(error, OperationType.GET, 'reservations');
-      } finally {
-        setLoading(false);
-      }
-    };
-    fetchReservations();
+    setLoading(true);
+    const q = query(collection(db, 'reservations'), where('date', '==', selectedDate));
+    
+    const unsubscribe = onSnapshot(q, (snap) => {
+      setReservations(snap.docs.map(d => ({ id: d.id, ...d.data() })));
+      setLoading(false);
+    }, (error) => {
+      console.error("Error fetching reservations:", error);
+      handleFirestoreError(error, OperationType.GET, 'reservations');
+      setLoading(false);
+    });
+
+    return () => unsubscribe();
   }, [selectedDate]);
 
   const toggleAttendance = async (id: string, currentStatus: boolean) => {
+    if (!navigator.onLine) {
+      toast.success('Sin conexión. El cambio se sincronizará luego.', { duration: 3000 });
+    }
     try {
-      await updateDoc(doc(db, 'reservations', id), { attended: !currentStatus });
-      setReservations(reservations.map(r => r.id === id ? { ...r, attended: !currentStatus } : r));
+      const promise = updateDoc(doc(db, 'reservations', id), { attended: !currentStatus });
+      if (navigator.onLine) {
+        await promise;
+      }
     } catch (error) {
       console.error("Error updating attendance:", error);
       handleFirestoreError(error, OperationType.UPDATE, `reservations/${id}`);
@@ -43,8 +50,33 @@ export default function MozoView() {
   const filteredReservations = reservations.filter(r => {
     const matchesMeal = r.meal === selectedMeal;
     const matchesSearch = r.userName.toLowerCase().includes(searchTerm.toLowerCase());
-    return matchesMeal && matchesSearch;
+    
+    let matchesFilter = true;
+    if (filterType === 'casino') matchesFilter = r.menuType === 'casino';
+    if (filterType === 'rancho') matchesFilter = r.menuType === 'rancho';
+    if (filterType === 'pending') matchesFilter = !r.attended;
+    
+    return matchesMeal && matchesSearch && matchesFilter;
   });
+
+  const handleExport = async (type: 'pdf' | 'excel') => {
+    if (reservations.length === 0) {
+      toast.error('No hay reservas para la fecha seleccionada.');
+      return;
+    }
+    
+    try {
+      const { exportToPDF, exportToExcel } = await import('../lib/exportUtils');
+      if (type === 'pdf') {
+        exportToPDF(selectedDate, reservations);
+      } else {
+        exportToExcel(selectedDate, reservations);
+      }
+    } catch (error) {
+      console.error("Error exporting:", error);
+      toast.error('Error al exportar los datos.');
+    }
+  };
 
   return (
     <div className="space-y-6 px-4 sm:px-0 pb-10">
@@ -63,13 +95,13 @@ export default function MozoView() {
           />
           <div className="flex gap-2">
             <button 
-              onClick={() => exportToPDF(selectedDate, reservations)}
+              onClick={() => handleExport('pdf')}
               className="flex-1 sm:flex-none flex items-center justify-center bg-red-600 hover:bg-red-500 text-white px-3 py-2 rounded font-bold text-xs uppercase tracking-wider transition-colors"
             >
               <Download className="w-4 h-4 mr-1" /> PDF
             </button>
             <button 
-              onClick={() => exportToExcel(selectedDate, reservations)}
+              onClick={() => handleExport('excel')}
               className="flex-1 sm:flex-none flex items-center justify-center bg-green-600 hover:bg-green-500 text-white px-3 py-2 rounded font-bold text-xs uppercase tracking-wider transition-colors"
             >
               <Download className="w-4 h-4 mr-1" /> Excel
@@ -96,18 +128,14 @@ export default function MozoView() {
         </div>
 
         {/* Search Bar */}
-        <div className="relative">
-          <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-            <Search className="h-5 w-5 text-slate-500" />
-          </div>
-          <input
-            type="text"
-            placeholder="Buscar por Grado/Apellido..."
-            value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
-            className="block w-full pl-10 pr-3 py-2 border border-slate-600 rounded-md leading-5 bg-slate-900 text-slate-300 placeholder-slate-500 focus:outline-none focus:ring-1 focus:ring-yellow-500 focus:border-yellow-500 sm:text-sm"
-          />
-        </div>
+        <SearchBar 
+          value={searchTerm} 
+          onChange={setSearchTerm} 
+          placeholder="Buscar por Grado/Apellido..." 
+        />
+
+        {/* Quick Filters */}
+        <FilterTabs filterType={filterType} setFilterType={setFilterType} />
       </div>
 
       {loading ? (

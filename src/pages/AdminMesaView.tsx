@@ -1,13 +1,14 @@
 import React, { useState, useEffect } from 'react';
 import { db, secondaryAuth } from '../lib/firebase';
-import { collection, query, where, getDocs, doc, setDoc, addDoc } from 'firebase/firestore';
+import { collection, query, where, doc, setDoc, addDoc, onSnapshot } from 'firebase/firestore';
 import { createUserWithEmailAndPassword, signOut } from 'firebase/auth';
 import { format, parseISO, startOfWeek, addDays } from 'date-fns';
 import { es } from 'date-fns/locale';
-import { Settings, UserPlus, FileText, ExternalLink, Calendar, ChevronLeft, ChevronRight, Download } from 'lucide-react';
+import { Settings, UserPlus, ExternalLink, Calendar, ChevronLeft, ChevronRight } from 'lucide-react';
 import { Link } from 'react-router-dom';
-import { exportToPDF, exportToExcel } from '../lib/exportUtils';
+import toast from 'react-hot-toast';
 import { handleFirestoreError, OperationType } from '../lib/firestoreErrors';
+import ExportPanel from '../components/ExportPanel';
 
 export default function AdminMesaView() {
   const todayStr = format(new Date(), 'yyyy-MM-dd');
@@ -21,54 +22,51 @@ export default function AdminMesaView() {
   const [newUserPhone, setNewUserPhone] = useState('');
   const [newUserName, setNewUserName] = useState('');
   const [newUserPassword, setNewUserPassword] = useState('');
+  const [newUserRole, setNewUserRole] = useState('comensal');
   const [creatingUser, setCreatingUser] = useState(false);
 
-  const [exportDate, setExportDate] = useState(todayStr);
-  const [exporting, setExporting] = useState(false);
-
   useEffect(() => {
-    const fetchMenus = async () => {
-      setLoadingMenus(true);
-      try {
-        const q = query(collection(db, 'menus'), where('date', 'in', weekDates));
-        const snap = await getDocs(q);
-        const menusData: Record<string, { almuerzo: { principal: string, bebida: string, postre: string }, cena: { principal: string, bebida: string, postre: string } }> = {};
+    setLoadingMenus(true);
+    const q = query(collection(db, 'menus'), where('date', 'in', weekDates));
+    
+    const unsubscribe = onSnapshot(q, (snap) => {
+      const menusData: Record<string, { almuerzo: { principal: string, bebida: string, postre: string }, cena: { principal: string, bebida: string, postre: string } }> = {};
+      
+      // Initialize with empty strings
+      weekDates.forEach(date => {
+        menusData[date] = { 
+          almuerzo: { principal: '', bebida: '', postre: '' }, 
+          cena: { principal: '', bebida: '', postre: '' } 
+        };
+      });
+
+      snap.forEach(d => {
+        const data = d.data();
         
-        // Initialize with empty strings
-        weekDates.forEach(date => {
-          menusData[date] = { 
-            almuerzo: { principal: '', bebida: '', postre: '' }, 
-            cena: { principal: '', bebida: '', postre: '' } 
+        const parseMenu = (menuData: any) => {
+          if (typeof menuData === 'string') return { principal: menuData, bebida: '', postre: '' };
+          if (typeof menuData === 'object' && menuData !== null) return { 
+            principal: menuData.principal || '', 
+            bebida: menuData.bebida || '', 
+            postre: menuData.postre || '' 
           };
-        });
+          return { principal: '', bebida: '', postre: '' };
+        };
 
-        snap.forEach(d => {
-          const data = d.data();
-          
-          const parseMenu = (menuData: any) => {
-            if (typeof menuData === 'string') return { principal: menuData, bebida: '', postre: '' };
-            if (typeof menuData === 'object' && menuData !== null) return { 
-              principal: menuData.principal || '', 
-              bebida: menuData.bebida || '', 
-              postre: menuData.postre || '' 
-            };
-            return { principal: '', bebida: '', postre: '' };
-          };
+        menusData[data.date] = {
+          almuerzo: parseMenu(data.casinoMenuAlmuerzo || data.casinoMenu),
+          cena: parseMenu(data.casinoMenuCena || data.casinoMenu)
+        };
+      });
+      setMenus(menusData);
+      setLoadingMenus(false);
+    }, (error) => {
+      console.error("Error fetching menus:", error);
+      handleFirestoreError(error, OperationType.GET, 'menus');
+      setLoadingMenus(false);
+    });
 
-          menusData[data.date] = {
-            almuerzo: parseMenu(data.casinoMenuAlmuerzo || data.casinoMenu),
-            cena: parseMenu(data.casinoMenuCena || data.casinoMenu)
-          };
-        });
-        setMenus(menusData);
-      } catch (error) {
-        console.error("Error fetching menus:", error);
-        handleFirestoreError(error, OperationType.GET, 'menus');
-      } finally {
-        setLoadingMenus(false);
-      }
-    };
-    fetchMenus();
+    return () => unsubscribe();
   }, [currentWeekStart]);
 
   const handleMenuChange = (date: string, meal: 'almuerzo' | 'cena', field: 'principal' | 'bebida' | 'postre', value: string) => {
@@ -85,10 +83,14 @@ export default function AdminMesaView() {
   };
 
   const handleSaveMenu = async (date: string) => {
+    if (!navigator.onLine) {
+      toast.success('Estás sin conexión. El menú se guardará cuando recuperes la señal.', { duration: 4000 });
+    }
+    
     setSavingDate(date);
     try {
       const menuData = menus[date];
-      await setDoc(doc(db, 'menus', date), {
+      const promise1 = setDoc(doc(db, 'menus', date), {
         date: date,
         casinoMenuAlmuerzo: menuData.almuerzo,
         casinoMenuCena: menuData.cena,
@@ -97,7 +99,7 @@ export default function AdminMesaView() {
       });
 
       const displayDate = format(parseISO(date), "EEEE, d 'de' MMMM", { locale: es });
-      await addDoc(collection(db, 'notifications'), {
+      const promise2 = addDoc(collection(db, 'notifications'), {
         userId: 'ALL',
         title: 'Menú Actualizado',
         message: `El Administrador de Mesa ha publicado o modificado el menú para el día ${displayDate}.`,
@@ -105,10 +107,16 @@ export default function AdminMesaView() {
         readBy: []
       });
 
-      alert(`Menú del ${displayDate} guardado exitosamente.`);
+      if (navigator.onLine) {
+        await Promise.all([promise1, promise2]);
+        toast.success(`Menú del ${displayDate} guardado exitosamente.`);
+      } else {
+        // Optimistic success for offline
+        toast.success(`Menú guardado localmente. Se sincronizará pronto.`);
+      }
     } catch (error) {
       console.error("Error saving menu:", error);
-      alert('Error al guardar el menú.');
+      toast.error('Error al guardar el menú.');
       handleFirestoreError(error, OperationType.WRITE, `menus/${date}`);
     } finally {
       setSavingDate(null);
@@ -117,59 +125,47 @@ export default function AdminMesaView() {
 
   const handleCreateUser = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!navigator.onLine) {
+      toast.error('Necesitas conexión a internet para registrar un nuevo usuario.');
+      return;
+    }
+    
     setCreatingUser(true);
     try {
       // Create user in Firebase Auth using secondary instance to prevent logging out admin
       const email = `${newUserPhone}@gecb.mil.ar`;
       const userCred = await createUserWithEmailAndPassword(secondaryAuth, email, newUserPassword);
       
-      // Create user profile in Firestore
-      await setDoc(doc(db, 'users', userCred.user.uid), {
-        uid: userCred.user.uid,
-        phone: newUserPhone,
-        name: newUserName,
-        role: 'comensal',
-        createdAt: new Date().toISOString()
-      });
+      try {
+        // Create user profile in Firestore
+        await setDoc(doc(db, 'users', userCred.user.uid), {
+          uid: userCred.user.uid,
+          phone: newUserPhone,
+          name: newUserName,
+          role: newUserRole,
+          createdAt: new Date().toISOString()
+        });
 
-      // Sign out from the secondary auth instance to clean up
-      await signOut(secondaryAuth);
+        // Sign out from the secondary auth instance to clean up
+        await signOut(secondaryAuth);
 
-      alert('Usuario creado exitosamente.');
-      setNewUserPhone('');
-      setNewUserName('');
-      setNewUserPassword('');
+        toast.success('Usuario creado exitosamente.');
+        setNewUserPhone('');
+        setNewUserName('');
+        setNewUserPassword('');
+      } catch (dbError) {
+        // Rollback: delete the user from Auth if Firestore write fails
+        if (userCred && userCred.user) {
+          await userCred.user.delete().catch(console.error);
+        }
+        await signOut(secondaryAuth);
+        throw dbError;
+      }
     } catch (error: any) {
       console.error("Error creating user:", error);
-      alert(`Error al crear usuario: ${error.message}`);
+      toast.error(`Error al crear usuario: ${error.message}`);
     } finally {
       setCreatingUser(false);
-    }
-  };
-
-  const handleExport = async (type: 'pdf' | 'excel') => {
-    setExporting(true);
-    try {
-      const q = query(collection(db, 'reservations'), where('date', '==', exportDate));
-      const snap = await getDocs(q);
-      const reservations = snap.docs.map(d => ({ id: d.id, ...d.data() }));
-      
-      if (reservations.length === 0) {
-        alert('No hay reservas para la fecha seleccionada.');
-        return;
-      }
-
-      if (type === 'pdf') {
-        exportToPDF(exportDate, reservations);
-      } else {
-        exportToExcel(exportDate, reservations);
-      }
-    } catch (error) {
-      console.error("Error exporting data:", error);
-      alert('Error al exportar los datos.');
-      handleFirestoreError(error, OperationType.GET, 'reservations');
-    } finally {
-      setExporting(false);
     }
   };
 
@@ -195,7 +191,7 @@ export default function AdminMesaView() {
           </div>
           <form onSubmit={handleCreateUser} className="p-6 space-y-4">
             <div>
-              <label className="block text-sm font-medium text-slate-300 mb-1">Nombre y Apellido / Grado</label>
+              <label className="block text-sm font-medium text-slate-300 mb-1">Grado, Nombre y APELLIDO</label>
               <input
                 type="text"
                 required
@@ -227,6 +223,18 @@ export default function AdminMesaView() {
                 minLength={6}
               />
             </div>
+            <div>
+              <label className="block text-sm font-medium text-slate-300 mb-1">Rol</label>
+              <select
+                value={newUserRole}
+                onChange={(e) => setNewUserRole(e.target.value)}
+                className="w-full bg-slate-900 border border-slate-600 text-white px-3 py-2 rounded focus:outline-none focus:border-yellow-500"
+              >
+                <option value="comensal">Comensal</option>
+                <option value="mozo">Mozo</option>
+                <option value="cocinero">Cocinero</option>
+              </select>
+            </div>
             <button
               type="submit"
               disabled={creatingUser}
@@ -239,39 +247,7 @@ export default function AdminMesaView() {
 
         <div className="space-y-6">
           {/* Exportar Planillas */}
-          <div className="bg-slate-800 rounded-lg shadow-lg border border-slate-700 overflow-hidden">
-            <div className="bg-blue-950 px-6 py-4 border-b border-yellow-600/30 flex items-center">
-              <FileText className="mr-2 h-5 w-5 text-yellow-500" />
-              <h3 className="text-lg font-bold text-white uppercase tracking-wider">Exportar Planillas</h3>
-            </div>
-            <div className="p-6 space-y-4">
-              <div>
-                <label className="block text-sm font-medium text-slate-300 mb-1">Fecha de la Planilla</label>
-                <input
-                  type="date"
-                  value={exportDate}
-                  onChange={(e) => setExportDate(e.target.value)}
-                  className="w-full bg-slate-900 border border-slate-600 text-white px-3 py-2 rounded focus:outline-none focus:border-yellow-500"
-                />
-              </div>
-              <div className="flex gap-3">
-                <button
-                  onClick={() => handleExport('pdf')}
-                  disabled={exporting}
-                  className="flex-1 flex items-center justify-center py-2 px-4 bg-red-600 hover:bg-red-500 text-white font-bold rounded transition-colors disabled:opacity-50 uppercase text-xs tracking-wider"
-                >
-                  <Download className="w-4 h-4 mr-2" /> PDF
-                </button>
-                <button
-                  onClick={() => handleExport('excel')}
-                  disabled={exporting}
-                  className="flex-1 flex items-center justify-center py-2 px-4 bg-green-600 hover:bg-green-500 text-white font-bold rounded transition-colors disabled:opacity-50 uppercase text-xs tracking-wider"
-                >
-                  <Download className="w-4 h-4 mr-2" /> Excel
-                </button>
-              </div>
-            </div>
-          </div>
+          <ExportPanel />
 
           {/* Accesos Rápidos */}
           <div className="bg-slate-800 rounded-lg shadow-lg border border-slate-700 overflow-hidden">
@@ -287,6 +263,9 @@ export default function AdminMesaView() {
                 </Link>
                 <Link to="/mozo" className="inline-flex items-center justify-center px-4 py-3 border border-slate-600 text-slate-300 hover:bg-slate-700 rounded transition-colors uppercase text-sm font-bold tracking-wider">
                   Vista Mozo <ExternalLink className="ml-2 h-4 w-4" />
+                </Link>
+                <Link to="/cocina" className="inline-flex items-center justify-center px-4 py-3 border border-slate-600 text-slate-300 hover:bg-slate-700 rounded transition-colors uppercase text-sm font-bold tracking-wider">
+                  Vista Cocina <ExternalLink className="ml-2 h-4 w-4" />
                 </Link>
               </div>
             </div>

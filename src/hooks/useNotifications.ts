@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { collection, query, where, onSnapshot, updateDoc, doc } from 'firebase/firestore';
+import { collection, query, where, onSnapshot, updateDoc, doc, limit } from 'firebase/firestore';
 import { db } from '../lib/firebase';
 import { useAuth } from '../contexts/AuthContext';
 
@@ -28,7 +28,8 @@ export function useNotifications() {
     // Escuchar notificaciones dirigidas al usuario o a todos ('ALL')
     const q = query(
       collection(db, 'notifications'),
-      where('userId', 'in', [profile.uid, 'ALL'])
+      where('userId', 'in', [profile.uid, 'ALL']),
+      limit(30)
     );
 
     const unsubscribe = onSnapshot(q, (snapshot) => {

@@ -84,7 +84,7 @@ export default function DashboardLayout() {
               
               {/* Desktop Nav Links */}
               <div className="hidden md:flex ml-8 space-x-2">
-                <NavItem to="/superadmin" label="Superadmin" allowedRoles={['superadmin']} />
+                <NavItem to="/superadmin" label="SuperAdmin" allowedRoles={['superadmin']} />
                 <NavItem to="/admin-mesa" label="Admin Mesa" allowedRoles={['superadmin', 'admin_mesa']} />
                 <NavItem to="/cocinero" label="Cocina" allowedRoles={['superadmin', 'cocinero']} />
                 <NavItem to="/mozo" label="Mozo" allowedRoles={['superadmin', 'admin_mesa', 'mozo']} />
@@ -226,7 +226,7 @@ export default function DashboardLayout() {
         {isMobileMenuOpen && (
           <div className="md:hidden bg-slate-800 border-b border-slate-700">
             <div className="px-2 pt-2 pb-3 space-y-1 border-b border-slate-700">
-              <NavItem to="/superadmin" label="Superadmin" allowedRoles={['superadmin']} />
+              <NavItem to="/superadmin" label="SuperAdmin" allowedRoles={['superadmin']} />
               <NavItem to="/admin-mesa" label="Admin Mesa" allowedRoles={['superadmin', 'admin_mesa']} />
               <NavItem to="/cocinero" label="Cocina" allowedRoles={['superadmin', 'cocinero']} />
               <NavItem to="/mozo" label="Mozo" allowedRoles={['superadmin', 'admin_mesa', 'mozo']} />

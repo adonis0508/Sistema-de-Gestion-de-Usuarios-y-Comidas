@@ -1,0 +1,22 @@
+{
+  "short_name": "CasinoGECB",
+  "name": "Sistema de Gestión - Casino de Oficiales GECB",
+  "icons": [
+    {
+      "src": "/DEf.png",
+      "type": "image/png",
+      "sizes": "192x192"
+    },
+    {
+      "src": "/DEf.png",
+      "type": "image/png",
+      "sizes": "512x512"
+    }
+  ],
+  "start_url": "/",
+  "background_color": "#0f172a",
+  "display": "standalone",
+  "scope": "/",
+  "theme_color": "#1e293b",
+  "description": "Sistema de Gestión para el Casino de Oficiales del Batallón de Guerra Electrónica y Ciberdefensa 601"
+}
