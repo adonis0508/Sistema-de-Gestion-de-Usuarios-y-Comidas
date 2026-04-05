@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { db } from '../lib/firebase';
-import { collection, onSnapshot, doc, updateDoc } from 'firebase/firestore';
-import { ShieldAlert, UserCog, ExternalLink } from 'lucide-react';
+import { collection, onSnapshot, doc, updateDoc, deleteDoc, query, where, getDocs, writeBatch } from 'firebase/firestore';
+import { ShieldAlert, UserCog, ExternalLink, Trash2 } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { Role } from '../types';
 import toast from 'react-hot-toast';
@@ -11,6 +11,7 @@ import ExportPanel from '../components/ExportPanel';
 export default function SuperAdminView() {
   const [users, setUsers] = useState<any[]>([]);
   const [loading, setLoading] = useState(false);
+  const [actionLoading, setActionLoading] = useState<string | null>(null);
 
   useEffect(() => {
     setLoading(true);
@@ -27,6 +28,7 @@ export default function SuperAdminView() {
   }, []);
 
   const handleRoleChange = async (userId: string, newRole: Role) => {
+    setActionLoading(userId);
     try {
       await updateDoc(doc(db, 'users', userId), { role: newRole });
       toast.success("Rol actualizado exitosamente.");
@@ -34,6 +36,40 @@ export default function SuperAdminView() {
       console.error("Error updating role:", error);
       toast.error("Error al actualizar el rol.");
       handleFirestoreError(error, OperationType.UPDATE, `users/${userId}`);
+    } finally {
+      setActionLoading(null);
+    }
+  };
+
+  const handleDeleteUser = async (userId: string, userName: string) => {
+    if (!window.confirm(`¿Estás seguro de que deseas eliminar al usuario ${userName}? Esta acción eliminará también todas sus reservas y no se puede deshacer.`)) {
+      return;
+    }
+
+    setActionLoading(userId);
+    try {
+      // 1. Delete user document
+      await deleteDoc(doc(db, 'users', userId));
+
+      // 2. Cascading delete: Find and delete all reservations for this user
+      const resQuery = query(collection(db, 'reservations'), where('userId', '==', userId));
+      const resSnapshot = await getDocs(resQuery);
+      
+      if (!resSnapshot.empty) {
+        const batch = writeBatch(db);
+        resSnapshot.docs.forEach((docSnap) => {
+          batch.delete(docSnap.ref);
+        });
+        await batch.commit();
+      }
+
+      toast.success(`Usuario ${userName} y sus reservas eliminados.`);
+    } catch (error) {
+      console.error("Error deleting user:", error);
+      toast.error("Error al eliminar el usuario.");
+      handleFirestoreError(error, OperationType.DELETE, `users/${userId}`);
+    } finally {
+      setActionLoading(null);
     }
   };
 
@@ -87,7 +123,7 @@ export default function SuperAdminView() {
           </span>
         </div>
         
-        <div className="overflow-x-auto">
+        <div className="hidden md:block overflow-x-auto">
           <table className="min-w-full divide-y divide-slate-700">
             <thead className="bg-slate-900/50">
               <tr>
@@ -127,11 +163,12 @@ export default function SuperAdminView() {
                         {user.role}
                       </span>
                     </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-slate-300">
+                    <td className="px-6 py-4 whitespace-nowrap text-sm text-slate-300 flex items-center space-x-3">
                       <select
                         value={user.role}
+                        disabled={actionLoading === user.id}
                         onChange={(e) => handleRoleChange(user.id, e.target.value as Role)}
-                        className="bg-slate-900 border border-slate-600 text-white text-sm rounded focus:ring-yellow-500 focus:border-yellow-500 block w-full p-2"
+                        className="bg-slate-900 border border-slate-600 text-white text-sm rounded focus:ring-yellow-500 focus:border-yellow-500 block w-full p-2 disabled:opacity-50"
                       >
                         <option value="comensal">Comensal</option>
                         <option value="mozo">Mozo</option>
@@ -139,12 +176,65 @@ export default function SuperAdminView() {
                         <option value="admin_mesa">Admin de Mesa</option>
                         <option value="superadmin">Superadmin</option>
                       </select>
+                      <button
+                        onClick={() => handleDeleteUser(user.id, user.name)}
+                        disabled={actionLoading === user.id}
+                        className="p-2 text-red-400 hover:text-red-300 hover:bg-red-900/30 rounded transition-colors disabled:opacity-50"
+                        title="Eliminar usuario"
+                      >
+                        <Trash2 className="h-5 w-5" />
+                      </button>
                     </td>
                   </tr>
                 ))
               )}
             </tbody>
           </table>
+        </div>
+
+        {/* Mobile Cards View */}
+        <div className="md:hidden divide-y divide-slate-700">
+          {loading ? (
+            <div className="p-6 text-center text-yellow-500">Cargando usuarios...</div>
+          ) : (
+            users.map((user) => (
+              <div key={user.id} className="p-4 space-y-3">
+                <div className="flex justify-between items-start">
+                  <div>
+                    <h4 className="text-white font-bold text-sm">{user.name}</h4>
+                    <p className="text-slate-400 text-xs mt-1">{user.phone}</p>
+                  </div>
+                  <span className={`px-2 py-1 inline-flex text-[10px] leading-4 font-bold uppercase tracking-wider rounded-full 
+                    ${user.role === 'superadmin' ? 'bg-red-900/50 text-red-400 border border-red-500/50' : 
+                      user.role === 'admin_mesa' ? 'bg-yellow-900/50 text-yellow-500 border border-yellow-600/50' : 
+                      'bg-slate-700 text-slate-300 border border-slate-600'}`}>
+                    {user.role}
+                  </span>
+                </div>
+                <div className="flex items-center space-x-2 pt-2 border-t border-slate-700/50">
+                  <select
+                    value={user.role}
+                    disabled={actionLoading === user.id}
+                    onChange={(e) => handleRoleChange(user.id, e.target.value as Role)}
+                    className="flex-1 bg-slate-900 border border-slate-600 text-white text-sm rounded focus:ring-yellow-500 focus:border-yellow-500 block p-2 disabled:opacity-50"
+                  >
+                    <option value="comensal">Comensal</option>
+                    <option value="mozo">Mozo</option>
+                    <option value="cocinero">Cocinero</option>
+                    <option value="admin_mesa">Admin de Mesa</option>
+                    <option value="superadmin">Superadmin</option>
+                  </select>
+                  <button
+                    onClick={() => handleDeleteUser(user.id, user.name)}
+                    disabled={actionLoading === user.id}
+                    className="p-2 text-red-400 hover:text-red-300 hover:bg-red-900/30 rounded border border-red-900/50 transition-colors disabled:opacity-50"
+                  >
+                    <Trash2 className="h-5 w-5" />
+                  </button>
+                </div>
+              </div>
+            ))
+          )}
         </div>
       </div>
     </div>

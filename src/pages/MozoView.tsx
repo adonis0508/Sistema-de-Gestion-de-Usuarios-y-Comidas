@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { db } from '../lib/firebase';
 import { collection, query, where, onSnapshot, updateDoc, doc } from 'firebase/firestore';
 import { format } from 'date-fns';
-import { CheckSquare, Square, Users, Download } from 'lucide-react';
+import { CheckSquare, Square, Users, Download, CalendarX2 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { handleFirestoreError, OperationType } from '../lib/firestoreErrors';
 import SearchBar from '../components/SearchBar';
@@ -169,7 +169,10 @@ function MealList({ title, reservations, onToggle }: any) {
       </div>
       <div className="divide-y divide-slate-700/50">
         {reservations.length === 0 ? (
-          <div className="p-6 text-center text-slate-400 text-sm">No hay reservas que coincidan con la búsqueda.</div>
+          <div className="p-10 text-center flex flex-col items-center justify-center text-slate-400">
+            <CalendarX2 className="h-12 w-12 mb-3 opacity-20" />
+            <p className="text-sm font-medium">No hay reservas que coincidan con la búsqueda.</p>
+          </div>
         ) : (
           reservations.map((res: any) => (
             <div key={res.id} className="p-4 flex items-center justify-between hover:bg-slate-700/30 transition-colors">

@@ -47,7 +47,7 @@ export default function DashboardLayout() {
     return (
       <Link
         to={to}
-        className={`px-3 py-2 rounded-md text-sm font-medium transition-colors ${
+        className={`block md:inline-block px-3 py-2 rounded-md text-sm font-medium transition-colors ${
           isActive 
             ? 'bg-yellow-600 text-blue-950 font-bold' 
             : 'text-slate-300 hover:bg-slate-700 hover:text-white'
@@ -72,9 +72,9 @@ export default function DashboardLayout() {
           <div className="flex justify-between h-16">
             <div className="flex items-center">
               <div className="flex items-center space-x-2 mr-4">
-                <img src="/deff.png" alt="EA" className="h-8 w-8 sm:h-10 sm:w-10 object-contain flex-shrink-0" />
+                <img src="/deff.png" alt="EA" width="40" height="40" className="h-8 w-8 sm:h-10 sm:w-10 object-contain flex-shrink-0" />
                 <div className="h-8 w-8 sm:h-10 sm:w-10 rounded-full bg-slate-800 border border-yellow-600 flex items-center justify-center overflow-hidden p-0.5 flex-shrink-0">
-                  <img src="/DEf.png" alt="Agr Com 601" className="h-full w-full object-contain" />
+                  <img src="/DEf.png" alt="Agr Com 601" width="40" height="40" className="h-full w-full object-contain" />
                 </div>
               </div>
               <div className="flex flex-col hidden sm:flex">
@@ -124,8 +124,9 @@ export default function DashboardLayout() {
                     </div>
                     <div className="max-h-96 overflow-y-auto">
                       {notifications.length === 0 ? (
-                        <div className="px-4 py-6 text-center text-sm text-slate-400">
-                          No tienes notificaciones
+                        <div className="px-4 py-8 text-center flex flex-col items-center justify-center text-slate-400">
+                          <Bell className="h-8 w-8 mb-2 opacity-20" />
+                          <span className="text-sm">No tienes notificaciones</span>
                         </div>
                       ) : (
                         notifications.map((notif) => {
@@ -183,10 +184,10 @@ export default function DashboardLayout() {
               </button>
 
               <button
-                onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
+                onClick={() => setIsMobileMenuOpen(true)}
                 className="inline-flex items-center justify-center p-2 rounded-md text-slate-400 hover:text-white hover:bg-slate-800 focus:outline-none"
               >
-                {isMobileMenuOpen ? <X className="h-6 w-6" /> : <Menu className="h-6 w-6" />}
+                <Menu className="h-6 w-6" />
               </button>
             </div>
           </div>
@@ -202,7 +203,10 @@ export default function DashboardLayout() {
               )}
             </div>
             {notifications.length === 0 ? (
-              <div className="px-4 py-4 text-center text-sm text-slate-400">No tienes notificaciones</div>
+              <div className="px-4 py-8 text-center flex flex-col items-center justify-center text-slate-400">
+                <Bell className="h-8 w-8 mb-2 opacity-20" />
+                <span className="text-sm">No tienes notificaciones</span>
+              </div>
             ) : (
               notifications.map((notif) => {
                 const isRead = profile && notif.readBy.includes(profile.uid);
@@ -222,32 +226,54 @@ export default function DashboardLayout() {
           </div>
         )}
 
-        {/* Mobile menu */}
+        {/* Mobile menu overlay */}
         {isMobileMenuOpen && (
-          <div className="md:hidden bg-slate-800 border-b border-slate-700">
-            <div className="px-2 pt-2 pb-3 space-y-1 border-b border-slate-700">
-              <NavItem to="/superadmin" label="SuperAdmin" allowedRoles={['superadmin']} />
-              <NavItem to="/admin-mesa" label="Admin Mesa" allowedRoles={['superadmin', 'admin_mesa']} />
-              <NavItem to="/cocinero" label="Cocina" allowedRoles={['superadmin', 'cocinero']} />
-              <NavItem to="/mozo" label="Mozo" allowedRoles={['superadmin', 'admin_mesa', 'mozo']} />
-              <NavItem to="/comensal" label="Comensal" allowedRoles={['superadmin', 'admin_mesa', 'comensal']} />
-              <NavItem to="/acerca-de" label="Acerca de" allowedRoles={['superadmin', 'admin_mesa', 'cocinero', 'mozo', 'comensal']} />
-            </div>
-            <div className="px-4 py-3 border-b border-slate-700 flex justify-between items-center">
-              <div>
-                <div className="text-base font-medium text-white">{profile?.name}</div>
-                <div className="text-sm font-medium text-yellow-500 uppercase tracking-wider">{profile ? roleDisplayNames[profile.role] : ''}</div>
-              </div>
-              <button
-                onClick={handleLogout}
-                className="inline-flex items-center px-3 py-2 border border-slate-600 text-sm font-medium rounded-md text-slate-300 bg-slate-900 hover:text-white hover:bg-slate-700"
-              >
-                <LogOut className="h-4 w-4 mr-2" />
-                Salir
-              </button>
-            </div>
-          </div>
+          <div 
+            className="fixed inset-0 bg-black/60 z-40 md:hidden transition-opacity" 
+            onClick={() => setIsMobileMenuOpen(false)}
+          />
         )}
+
+        {/* Mobile menu sidebar */}
+        <div className={`fixed inset-y-0 right-0 z-50 w-64 bg-slate-900 shadow-2xl border-l border-slate-700 transform transition-transform duration-300 ease-in-out md:hidden flex flex-col ${isMobileMenuOpen ? 'translate-x-0' : 'translate-x-full'}`}>
+          <div className="p-4 border-b border-slate-700 flex justify-between items-center bg-blue-950">
+            <div className="flex items-center space-x-2">
+              <div className="h-8 w-8 rounded-full bg-slate-800 border border-yellow-600 flex items-center justify-center overflow-hidden p-0.5">
+                <img src="/DEf.png" alt="Agr Com 601" width="32" height="32" className="h-full w-full object-contain" />
+              </div>
+              <span className="text-white font-bold text-sm uppercase tracking-wider">Menú</span>
+            </div>
+            <button
+              onClick={() => setIsMobileMenuOpen(false)}
+              className="p-1 rounded-md text-slate-400 hover:text-white hover:bg-slate-800 focus:outline-none transition-colors"
+            >
+              <X className="h-6 w-6" />
+            </button>
+          </div>
+          
+          <div className="flex-1 overflow-y-auto py-4 px-2 space-y-2">
+            <NavItem to="/superadmin" label="SuperAdmin" allowedRoles={['superadmin']} />
+            <NavItem to="/admin-mesa" label="Admin Mesa" allowedRoles={['superadmin', 'admin_mesa']} />
+            <NavItem to="/cocinero" label="Cocina" allowedRoles={['superadmin', 'cocinero']} />
+            <NavItem to="/mozo" label="Mozo" allowedRoles={['superadmin', 'admin_mesa', 'mozo']} />
+            <NavItem to="/comensal" label="Comensal" allowedRoles={['superadmin', 'admin_mesa', 'comensal']} />
+            <NavItem to="/acerca-de" label="Acerca de" allowedRoles={['superadmin', 'admin_mesa', 'cocinero', 'mozo', 'comensal']} />
+          </div>
+          
+          <div className="p-4 border-t border-slate-700 bg-slate-800">
+            <div className="mb-4">
+              <div className="text-base font-bold text-white truncate">{profile?.name}</div>
+              <div className="text-xs font-bold text-yellow-500 uppercase tracking-wider">{profile ? roleDisplayNames[profile.role] : ''}</div>
+            </div>
+            <button
+              onClick={handleLogout}
+              className="w-full flex justify-center items-center px-4 py-2 border border-slate-600 text-sm font-bold rounded-md text-slate-300 bg-slate-900 hover:text-white hover:bg-slate-700 uppercase tracking-wider transition-colors"
+            >
+              <LogOut className="h-4 w-4 mr-2" />
+              Cerrar Sesión
+            </button>
+          </div>
+        </div>
       </nav>
 
       {/* Main Content */}

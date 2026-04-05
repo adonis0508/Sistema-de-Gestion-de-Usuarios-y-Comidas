@@ -44,7 +44,7 @@ export default function AboutView() {
                   </div>
                 </div>
                 <div className="flex-shrink-0">
-                  <img src="/BGEYCD601.png" alt="Escudo BGEYCD 601" className="h-[110px] w-[110px] object-contain drop-shadow-lg" />
+                  <img src="/BGEYCD601.png" alt="Escudo BGEYCD 601" width="110" height="110" className="h-[110px] w-[110px] object-contain drop-shadow-lg" />
                 </div>
               </div>
             </div>

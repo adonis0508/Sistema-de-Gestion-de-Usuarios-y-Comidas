@@ -4,7 +4,7 @@ import { collection, query, where, doc, setDoc, addDoc, onSnapshot } from 'fireb
 import { createUserWithEmailAndPassword, signOut } from 'firebase/auth';
 import { format, parseISO, startOfWeek, addDays } from 'date-fns';
 import { es } from 'date-fns/locale';
-import { Settings, UserPlus, ExternalLink, Calendar, ChevronLeft, ChevronRight } from 'lucide-react';
+import { Settings, UserPlus, ExternalLink, Calendar, ChevronLeft, ChevronRight, CalendarX2 } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import toast from 'react-hot-toast';
 import { handleFirestoreError, OperationType } from '../lib/firestoreErrors';
@@ -24,6 +24,20 @@ export default function AdminMesaView() {
   const [newUserPassword, setNewUserPassword] = useState('');
   const [newUserRole, setNewUserRole] = useState('comensal');
   const [creatingUser, setCreatingUser] = useState(false);
+  const [isDirty, setIsDirty] = useState(false);
+
+  // Prevent accidental navigation if there are unsaved changes
+  useEffect(() => {
+    const handleBeforeUnload = (e: BeforeUnloadEvent) => {
+      if (isDirty) {
+        e.preventDefault();
+        e.returnValue = '';
+      }
+    };
+
+    window.addEventListener('beforeunload', handleBeforeUnload);
+    return () => window.removeEventListener('beforeunload', handleBeforeUnload);
+  }, [isDirty]);
 
   useEffect(() => {
     setLoadingMenus(true);
@@ -70,6 +84,7 @@ export default function AdminMesaView() {
   }, [currentWeekStart]);
 
   const handleMenuChange = (date: string, meal: 'almuerzo' | 'cena', field: 'principal' | 'bebida' | 'postre', value: string) => {
+    setIsDirty(true);
     setMenus(prev => ({
       ...prev,
       [date]: {
@@ -114,6 +129,7 @@ export default function AdminMesaView() {
         // Optimistic success for offline
         toast.success(`Menú guardado localmente. Se sincronizará pronto.`);
       }
+      setIsDirty(false);
     } catch (error) {
       console.error("Error saving menu:", error);
       toast.error('Error al guardar el menú.');
@@ -307,7 +323,8 @@ export default function AdminMesaView() {
         ) : (
           <div className="space-y-6">
             {weekDates.filter(dateStr => dateStr >= todayStr).length === 0 ? (
-              <div className="text-center py-10 bg-slate-800 rounded-lg border border-slate-700">
+              <div className="text-center py-12 bg-slate-800 rounded-lg border border-slate-700 flex flex-col items-center justify-center">
+                <CalendarX2 className="h-12 w-12 text-slate-500 mb-4 opacity-20" />
                 <p className="text-slate-400 font-medium uppercase tracking-wider text-sm">
                   Los días anteriores ya no están disponibles para configuración.
                 </p>

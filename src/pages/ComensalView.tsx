@@ -29,6 +29,7 @@ export default function ComensalView() {
   const [reservations, setReservations] = useState<Record<string, any[]>>({});
   const [loading, setLoading] = useState(true);
   const [showReminder, setShowReminder] = useState(false);
+  const [actionLoading, setActionLoading] = useState<string | null>(null);
 
   // Generate array of 7 dates for the current week view
   const weekDates = Array.from({ length: 7 }).map((_, i) => format(addDays(currentWeekStart, i), 'yyyy-MM-dd'));
@@ -131,6 +132,7 @@ export default function ComensalView() {
   const handleReserve = async (date: string, meal: 'almuerzo' | 'cena', menuType: 'casino' | 'rancho') => {
     if (!profile) return;
     
+    setActionLoading(`${date}-${meal}`);
     if (!navigator.onLine) {
       toast.success('Estás sin conexión. La reserva se guardará cuando recuperes la señal.', { duration: 4000 });
     }
@@ -156,10 +158,13 @@ export default function ComensalView() {
       console.error("Error reserving:", error);
       toast.error("Error al registrar la reserva.");
       handleFirestoreError(error, OperationType.CREATE, 'reservations');
+    } finally {
+      setActionLoading(null);
     }
   };
 
   const handleCancel = async (date: string, id: string) => {
+    setActionLoading(`cancel-${id}`);
     if (!navigator.onLine) {
       toast.success('Estás sin conexión. La cancelación se sincronizará luego.', { duration: 4000 });
     }
@@ -173,6 +178,8 @@ export default function ComensalView() {
       console.error("Error cancelling:", error);
       toast.error("Error al cancelar la reserva.");
       handleFirestoreError(error, OperationType.DELETE, `reservations/${id}`);
+    } finally {
+      setActionLoading(null);
     }
   };
 
@@ -275,6 +282,7 @@ export default function ComensalView() {
                       menuData={dayMenu.casinoMenuAlmuerzo || { principal: '', bebida: '', postre: '' }}
                       reservation={resAlmuerzo}
                       isTimeUp={isTimeUp}
+                      actionLoading={actionLoading}
                       onReserve={handleReserve}
                       onCancel={handleCancel}
                     />
@@ -286,6 +294,7 @@ export default function ComensalView() {
                       menuData={dayMenu.casinoMenuCena || { principal: '', bebida: '', postre: '' }}
                       reservation={resCena}
                       isTimeUp={isTimeUp}
+                      actionLoading={actionLoading}
                       onReserve={handleReserve}
                       onCancel={handleCancel}
                     />
@@ -300,7 +309,7 @@ export default function ComensalView() {
   );
 }
 
-function MealSection({ title, meal, date, menuData, reservation, isTimeUp, onReserve, onCancel }: any) {
+function MealSection({ title, meal, date, menuData, reservation, isTimeUp, actionLoading, onReserve, onCancel }: any) {
   const hasMenu = menuData.principal || menuData.bebida || menuData.postre;
 
   return (
@@ -355,27 +364,28 @@ function MealSection({ title, meal, date, menuData, reservation, isTimeUp, onRes
             {!isTimeUp && (
               <button
                 onClick={() => onCancel(date, reservation.id)}
-                className="w-full py-1.5 px-3 border border-red-500/50 text-red-400 rounded hover:bg-red-500/10 transition-colors font-medium uppercase text-xs tracking-wider"
+                disabled={actionLoading === `cancel-${reservation.id}`}
+                className="w-full py-1.5 px-3 border border-red-500/50 text-red-400 rounded hover:bg-red-500/10 transition-colors font-medium uppercase text-xs tracking-wider disabled:opacity-50"
               >
-                Cancelar Reserva
+                {actionLoading === `cancel-${reservation.id}` ? 'Procesando...' : 'Cancelar Reserva'}
               </button>
             )}
           </div>
         ) : (
           <div className="space-y-2">
             <button
-              disabled={isTimeUp}
+              disabled={isTimeUp || actionLoading === `${date}-${meal}`}
               onClick={() => onReserve(date, meal, 'casino')}
               className="w-full py-2 px-3 bg-yellow-600 hover:bg-yellow-500 text-blue-950 font-bold rounded transition-colors disabled:opacity-50 disabled:cursor-not-allowed uppercase text-xs tracking-wider"
             >
-              Anotarse (Casino)
+              {actionLoading === `${date}-${meal}` ? 'Procesando...' : 'Anotarse (Casino)'}
             </button>
             <button
-              disabled={isTimeUp}
+              disabled={isTimeUp || actionLoading === `${date}-${meal}`}
               onClick={() => onReserve(date, meal, 'rancho')}
               className="w-full py-2 px-3 bg-slate-700 hover:bg-slate-600 text-white font-bold rounded transition-colors disabled:opacity-50 disabled:cursor-not-allowed uppercase text-xs tracking-wider"
             >
-              Anotarse (Rancho)
+              {actionLoading === `${date}-${meal}` ? 'Procesando...' : 'Anotarse (Rancho)'}
             </button>
           </div>
         )}

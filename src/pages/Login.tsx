@@ -1,7 +1,8 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { signInWithEmailAndPassword } from 'firebase/auth';
 import { auth } from '../lib/firebase';
 import { useNavigate } from 'react-router-dom';
+import { useAuth } from '../contexts/AuthContext';
 
 export default function Login() {
   const [phone, setPhone] = useState('');
@@ -9,6 +10,13 @@ export default function Login() {
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
   const navigate = useNavigate();
+  const { user, profile } = useAuth();
+
+  useEffect(() => {
+    if (user && profile) {
+      navigate('/');
+    }
+  }, [user, profile, navigate]);
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -37,9 +45,9 @@ export default function Login() {
 
       <div className="sm:mx-auto sm:w-full sm:max-w-md relative z-10">
         <div className="flex justify-center space-x-6 items-center">
-          <img src="/deff.png" alt="Ejército Argentino" className="h-16 w-16 sm:h-20 sm:w-20 object-contain drop-shadow-lg flex-shrink-0" />
+          <img src="/deff.png" alt="Ejército Argentino" width="80" height="80" className="h-16 w-16 sm:h-20 sm:w-20 object-contain drop-shadow-lg flex-shrink-0" />
           <div className="h-20 w-20 sm:h-24 sm:w-24 rounded-full bg-slate-800 border-4 border-yellow-600 flex items-center justify-center shadow-[0_0_15px_rgba(202,138,4,0.5)] overflow-hidden p-1 flex-shrink-0">
-            <img src="/DEf.png" alt="Agr Com 601" className="h-full w-full object-contain" />
+            <img src="/DEf.png" alt="Agr Com 601" width="96" height="96" className="h-full w-full object-contain" />
           </div>
         </div>
         <h2 className="mt-6 text-center text-3xl font-extrabold text-white tracking-tight">
