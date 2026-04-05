@@ -1,0 +1,202 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    
+    // ===============================================================
+    // Assumed Data Model
+    // ===============================================================
+    //
+    // Collection: users
+    // Document ID: {userId}
+    // Fields:
+    //   - uid: string (required)
+    //   - phone: string (required)
+    //   - name: string (required)
+    //   - role: string (required, enum: comensal, mozo, cocinero, admin_mesa, superadmin)
+    //   - createdAt: string (required)
+    //
+    // Collection: menus
+    // Document ID: {date} (YYYY-MM-DD)
+    // Fields:
+    //   - date: string (required)
+    //   - casinoMenuAlmuerzo: map/string (required)
+    //   - casinoMenuCena: map/string (required)
+    //   - ranchoMenu: string (required)
+    //   - updatedAt: string (required)
+    //
+    // Collection: reservations
+    // Document ID: {reservationId}
+    // Fields:
+    //   - userId: string (required)
+    //   - userName: string (required)
+    //   - date: string (required)
+    //   - meal: string (required, enum: almuerzo, cena)
+    //   - menuType: string (required, enum: casino, rancho)
+    //   - attended: boolean (required)
+    //   - createdAt: string (required)
+    //
+    // Collection: notifications
+    // Document ID: {notificationId}
+    // Fields:
+    //   - userId: string (required)
+    //   - title: string (required)
+    //   - message: string (required)
+    //   - createdAt: string (required)
+    //   - readBy: list (required)
+    //
+    // ===============================================================
+
+    // ===============================================================
+    // Helper Functions
+    // ===============================================================
+    
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+
+    function isOwner(userId) {
+      return isAuthenticated() && request.auth.uid == userId;
+    }
+
+    function getUserRole() {
+      return exists(/databases/$(database)/documents/users/$(request.auth.uid)) 
+        ? get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role 
+        : 'none';
+    }
+
+    function isSuperAdmin() {
+      return isAuthenticated() && (
+        (request.auth.token.email == "angel.adonis.llanos.v@gmail.com" && request.auth.token.email_verified == true) ||
+        getUserRole() == 'superadmin'
+      );
+    }
+
+    function isAdminMesa() {
+      return isAuthenticated() && (getUserRole() == 'admin_mesa' || isSuperAdmin());
+    }
+
+    function isMozo() {
+      return isAuthenticated() && (getUserRole() == 'mozo' || isAdminMesa());
+    }
+
+    function isCocinero() {
+      return isAuthenticated() && (getUserRole() == 'cocinero' || isSuperAdmin());
+    }
+
+    function hasRequiredFields(fields) {
+      return request.resource.data.keys().hasAll(fields);
+    }
+
+    // ===============================================================
+    // Domain Validators
+    // ===============================================================
+
+    function isValidUser(data) {
+      return hasRequiredFields(['uid', 'phone', 'name', 'role', 'createdAt']) &&
+             data.uid is string && data.uid.size() > 0 && data.uid.size() < 100 &&
+             data.phone is string && data.phone.size() > 0 && data.phone.size() < 20 &&
+             data.name is string && data.name.size() > 0 && data.name.size() < 100 &&
+             data.role in ['comensal', 'mozo', 'cocinero', 'admin_mesa', 'superadmin'] &&
+             data.createdAt is string;
+    }
+
+    function isValidMenu(data) {
+      return hasRequiredFields(['date', 'casinoMenuAlmuerzo', 'casinoMenuCena', 'ranchoMenu', 'updatedAt']) &&
+             data.date is string && data.date.size() == 10 &&
+             data.ranchoMenu is string && data.ranchoMenu.size() < 1000 &&
+             data.updatedAt is string;
+    }
+
+    function isValidReservation(data) {
+      return hasRequiredFields(['userId', 'userName', 'date', 'meal', 'menuType', 'attended', 'createdAt']) &&
+             data.userId is string && data.userId.size() > 0 && data.userId.size() < 100 &&
+             data.userName is string && data.userName.size() > 0 && data.userName.size() < 100 &&
+             data.date is string && data.date.size() == 10 &&
+             data.meal in ['almuerzo', 'cena'] &&
+             data.menuType in ['casino', 'rancho'] &&
+             data.attended is bool &&
+             data.createdAt is string;
+    }
+
+    function isValidNotification(data) {
+      return hasRequiredFields(['userId', 'title', 'message', 'createdAt', 'readBy']) &&
+             data.userId is string && data.userId.size() > 0 && data.userId.size() < 100 &&
+             data.title is string && data.title.size() > 0 && data.title.size() < 200 &&
+             data.message is string && data.message.size() > 0 && data.message.size() < 1000 &&
+             data.createdAt is string &&
+             data.readBy is list;
+    }
+
+    // ===============================================================
+    // Rules
+    // ===============================================================
+
+    match /users/{userId} {
+      // Users can read their own profile. Superadmins can read all.
+      allow read: if isOwner(userId) || isSuperAdmin();
+      
+      // AdminMesa and SuperAdmin can create users.
+      // We enforce that AdminMesa cannot create superadmins unless they are superadmin.
+      allow create: if isAuthenticated() && isValidUser(request.resource.data) && request.resource.data.uid == userId && (
+        isSuperAdmin() || 
+        (isAdminMesa() && request.resource.data.role in ['comensal', 'mozo', 'cocinero'])
+      );
+      
+      // Only SuperAdmin can update users (e.g., changing roles).
+      allow update: if isSuperAdmin() && isValidUser(request.resource.data) && request.resource.data.uid == resource.data.uid;
+      
+      allow delete: if isSuperAdmin();
+    }
+
+    match /menus/{date} {
+      // Anyone authenticated can read the menu
+      allow read: if isAuthenticated();
+      
+      // Only AdminMesa (and SuperAdmin) can write menus
+      allow create, update: if isAdminMesa() && isValidMenu(request.resource.data) && request.resource.data.date == date;
+      allow delete: if isSuperAdmin();
+    }
+
+    match /reservations/{reservationId} {
+      // Comensales can read their own. Mozos, Cocineros, AdminMesa, SuperAdmin can read all.
+      allow read: if isOwner(resource.data.userId) || isMozo() || isCocinero() || isAdminMesa() || isSuperAdmin();
+      
+      // Users can create their own reservations
+      allow create: if isAuthenticated() && 
+                    isValidReservation(request.resource.data) && 
+                    request.resource.data.userId == request.auth.uid &&
+                    request.resource.data.attended == false;
+      
+      // Users can delete (cancel) their own reservations
+      allow delete: if isOwner(resource.data.userId);
+      
+      // Mozos can update the 'attended' status. They cannot change other fields.
+      allow update: if isMozo() && 
+                    isValidReservation(request.resource.data) &&
+                    request.resource.data.userId == resource.data.userId &&
+                    request.resource.data.userName == resource.data.userName &&
+                    request.resource.data.date == resource.data.date &&
+                    request.resource.data.meal == resource.data.meal &&
+                    request.resource.data.menuType == resource.data.menuType &&
+                    request.resource.data.createdAt == resource.data.createdAt;
+    }
+
+    match /notifications/{notificationId} {
+      // Users can read notifications meant for them or for 'ALL'
+      allow read: if isAuthenticated() && (resource.data.userId == request.auth.uid || resource.data.userId == 'ALL');
+      
+      // AdminMesa and SuperAdmin can create notifications
+      allow create: if isAdminMesa() && isValidNotification(request.resource.data);
+      
+      // Users can update readBy array to mark as read
+      allow update: if isAuthenticated() && 
+                    isValidNotification(request.resource.data) &&
+                    request.resource.data.userId == resource.data.userId &&
+                    request.resource.data.title == resource.data.title &&
+                    request.resource.data.message == resource.data.message &&
+                    request.resource.data.createdAt == resource.data.createdAt;
+                    
+      allow delete: if isSuperAdmin();
+    }
+  }
+}

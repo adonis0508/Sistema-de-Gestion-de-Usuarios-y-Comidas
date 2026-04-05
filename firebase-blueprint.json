@@ -1,0 +1,72 @@
+{
+  "entities": {
+    "UserProfile": {
+      "title": "UserProfile",
+      "description": "User profile and role information",
+      "type": "object",
+      "properties": {
+        "uid": { "type": "string" },
+        "phone": { "type": "string" },
+        "name": { "type": "string" },
+        "role": { "type": "string", "enum": ["comensal", "mozo", "cocinero", "admin_mesa", "superadmin"] },
+        "createdAt": { "type": "string" }
+      },
+      "required": ["uid", "phone", "name", "role"]
+    },
+    "DailyMenu": {
+      "title": "DailyMenu",
+      "description": "Daily menu configuration",
+      "type": "object",
+      "properties": {
+        "date": { "type": "string" },
+        "casinoMenuAlmuerzo": { "type": "string" },
+        "casinoMenuCena": { "type": "string" },
+        "ranchoMenu": { "type": "string" },
+        "updatedAt": { "type": "string" }
+      },
+      "required": ["date", "casinoMenuAlmuerzo", "casinoMenuCena", "ranchoMenu"]
+    },
+    "Reservation": {
+      "title": "Reservation",
+      "description": "User meal reservation",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string" },
+        "userName": { "type": "string" },
+        "date": { "type": "string" },
+        "meal": { "type": "string", "enum": ["almuerzo", "cena"] },
+        "menuType": { "type": "string", "enum": ["casino", "rancho"] },
+        "attended": { "type": "boolean" },
+        "createdAt": { "type": "string" }
+      },
+      "required": ["userId", "userName", "date", "meal", "menuType", "attended"]
+    },
+    "Notification": {
+      "title": "Notification",
+      "description": "System notifications for users",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string", "description": "UID of the user, or 'ALL' for broadcasts" },
+        "title": { "type": "string" },
+        "message": { "type": "string" },
+        "createdAt": { "type": "string" },
+        "readBy": { "type": "array", "items": { "type": "string" } }
+      },
+      "required": ["userId", "title", "message", "createdAt", "readBy"]
+    }
+  },
+  "firestore": {
+    "/users/{userId}": {
+      "schema": { "$ref": "#/entities/UserProfile" },
+      "description": "User profiles"
+    },
+    "/menus/{date}": {
+      "schema": { "$ref": "#/entities/DailyMenu" },
+      "description": "Daily menus"
+    },
+    "/reservations/{reservationId}": {
+      "schema": { "$ref": "#/entities/Reservation" },
+      "description": "Meal reservations"
+    }
+  }
+}
