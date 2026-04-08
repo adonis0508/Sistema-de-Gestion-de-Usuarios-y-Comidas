@@ -1,7 +1,8 @@
 import { useState, useEffect } from 'react';
-import { collection, query, where, onSnapshot, updateDoc, doc, limit } from 'firebase/firestore';
+import { collection, query, where, onSnapshot, updateDoc, doc, limit, arrayUnion } from 'firebase/firestore';
 import { db } from '../lib/firebase';
 import { useAuth } from '../contexts/AuthContext';
+import toast from 'react-hot-toast';
 
 export interface AppNotification {
   id: string;
@@ -29,7 +30,7 @@ export function useNotifications() {
     const q = query(
       collection(db, 'notifications'),
       where('userId', 'in', [profile.uid, 'ALL']),
-      limit(30)
+      limit(10)
     );
 
     const unsubscribe = onSnapshot(q, (snapshot) => {
@@ -40,8 +41,11 @@ export function useNotifications() {
         const data = docSnap.data() as Omit<AppNotification, 'id'>;
         const isRead = data.readBy?.includes(profile.uid);
         
-        notifs.push({ id: docSnap.id, ...data });
-        if (!isRead) unread++;
+        // Solo mostrar notificaciones no leídas (borrarlas de la vista una vez leídas)
+        if (!isRead) {
+          notifs.push({ id: docSnap.id, ...data });
+          unread++;
+        }
       });
 
       // Ordenar por fecha (más recientes primero)
@@ -73,19 +77,22 @@ export function useNotifications() {
 
     try {
       await updateDoc(doc(db, 'notifications', notificationId), {
-        readBy: [...currentReadBy, profile.uid]
+        readBy: arrayUnion(profile.uid)
       });
     } catch (error) {
       console.error("Error marking notification as read:", error);
+      toast.error("Error al marcar la notificación como leída");
     }
   };
 
   const markAllAsRead = async () => {
     if (!profile) return;
-    const unreadNotifs = notifications.filter(n => !n.readBy.includes(profile.uid));
+    const unreadNotifs = notifications.filter(n => !(n.readBy || []).includes(profile.uid));
     
-    for (const notif of unreadNotifs) {
-      await markAsRead(notif.id, notif.readBy);
+    try {
+      await Promise.all(unreadNotifs.map(notif => markAsRead(notif.id, notif.readBy || [])));
+    } catch (error) {
+      console.error("Error marking all as read:", error);
     }
   };
 

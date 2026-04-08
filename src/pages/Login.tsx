@@ -10,13 +10,17 @@ export default function Login() {
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
   const navigate = useNavigate();
-  const { user, profile } = useAuth();
+  const { user, profile, loading: authLoading } = useAuth();
 
   useEffect(() => {
     if (user && profile) {
       navigate('/');
+    } else if (user && !profile && !authLoading) {
+      // User is authenticated but has no profile in Firestore
+      setError('Tu cuenta no tiene un perfil asignado o fue eliminada. Contacta al administrador.');
+      auth.signOut();
     }
-  }, [user, profile, navigate]);
+  }, [user, profile, authLoading, navigate]);
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -27,7 +31,7 @@ export default function Login() {
       // We append a fake domain to use Firebase Email/Password auth with a phone number
       const email = `${phone}@gecb.mil.ar`;
       await signInWithEmailAndPassword(auth, email, password);
-      navigate('/');
+      // Don't navigate immediately. Let the useEffect handle it once the profile loads.
     } catch (err: any) {
       console.error(err);
       setError('Credenciales inválidas o error de conexión.');

@@ -130,12 +130,12 @@ export default function DashboardLayout() {
                         </div>
                       ) : (
                         notifications.map((notif) => {
-                          const isRead = profile && notif.readBy.includes(profile.uid);
+                          const isRead = profile && (notif.readBy || []).includes(profile.uid);
                           return (
                             <div 
                               key={notif.id} 
                               className={`px-4 py-3 border-b border-slate-700/50 hover:bg-slate-700/30 transition-colors cursor-pointer ${!isRead ? 'bg-slate-700/20' : ''}`}
-                              onClick={() => markAsRead(notif.id, notif.readBy)}
+                              onClick={() => markAsRead(notif.id, notif.readBy || [])}
                             >
                               <div className="flex justify-between items-start mb-1">
                                 <h4 className={`text-sm font-bold ${!isRead ? 'text-yellow-500' : 'text-slate-300'}`}>
@@ -209,12 +209,12 @@ export default function DashboardLayout() {
               </div>
             ) : (
               notifications.map((notif) => {
-                const isRead = profile && notif.readBy.includes(profile.uid);
+                const isRead = profile && (notif.readBy || []).includes(profile.uid);
                 return (
                   <div 
                     key={notif.id} 
                     className={`px-4 py-3 border-b border-slate-700/50 ${!isRead ? 'bg-slate-700/20' : ''}`}
-                    onClick={() => markAsRead(notif.id, notif.readBy)}
+                    onClick={() => markAsRead(notif.id, notif.readBy || [])}
                   >
                     <h4 className={`text-sm font-bold ${!isRead ? 'text-yellow-500' : 'text-slate-300'}`}>{notif.title}</h4>
                     <p className="text-xs text-slate-400 my-1">{notif.message}</p>

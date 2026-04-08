@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { db } from '../lib/firebase';
-import { collection, query, where, onSnapshot, addDoc, deleteDoc, doc } from 'firebase/firestore';
+import { collection, query, where, onSnapshot, setDoc, deleteDoc, doc } from 'firebase/firestore';
 import { format, parseISO, startOfWeek, addDays } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { Clock, Utensils, AlertTriangle, CheckCircle2, Calendar, ChevronLeft, ChevronRight, X } from 'lucide-react';
@@ -109,12 +109,19 @@ export default function ComensalView() {
           const reminderKey = `reminder_shown_${todayStr}`;
           if (!localStorage.getItem(reminderKey)) {
             setShowReminder(true);
+            // Marcar inmediatamente para evitar spam de notificaciones si hay re-renders
+            localStorage.setItem(reminderKey, 'true');
+            
             // También intentar notificación push si está permitida
             if ('Notification' in window && Notification.permission === 'granted') {
-              new Notification('Recordatorio de Casino', { 
-                body: 'Recuerda que las inscripciones cierran a las 10:00 AM. ¡Anota tu comida!',
-                icon: '/DEf.png'
-              });
+              try {
+                new Notification('Recordatorio de Casino', { 
+                  body: 'Recuerda que las inscripciones cierran a las 10:00 AM. ¡Anota tu comida!',
+                  icon: '/DEf.png'
+                });
+              } catch (error) {
+                console.error('Error al mostrar la notificación push:', error);
+              }
             }
           }
         }
@@ -123,6 +130,14 @@ export default function ComensalView() {
 
     checkDeadline();
   }, [profile, reservations, loading, todayStr]);
+
+  // Ocultar el recordatorio automáticamente si el usuario hace una reserva
+  useEffect(() => {
+    const todayRes = reservations[todayStr] || [];
+    if (todayRes.length > 0 && showReminder) {
+      setShowReminder(false);
+    }
+  }, [reservations, todayStr, showReminder]);
 
   const dismissReminder = () => {
     localStorage.setItem(`reminder_shown_${todayStr}`, 'true');
@@ -148,9 +163,12 @@ export default function ComensalView() {
         createdAt: new Date().toISOString()
       };
       
+      // Deterministic ID to prevent duplicates: userId_date_meal
+      const deterministicId = `${profile.uid}_${date}_${meal}`;
+      
       // No hacemos await si estamos offline para no bloquear la UI, 
       // Firestore actualizará la caché local inmediatamente y onSnapshot hará el resto.
-      const promise = addDoc(collection(db, 'reservations'), newRes);
+      const promise = setDoc(doc(db, 'reservations', deterministicId), newRes);
       if (navigator.onLine) {
         await promise;
       }

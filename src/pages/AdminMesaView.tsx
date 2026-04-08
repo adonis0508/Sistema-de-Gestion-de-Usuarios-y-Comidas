@@ -179,7 +179,11 @@ export default function AdminMesaView() {
       }
     } catch (error: any) {
       console.error("Error creating user:", error);
-      toast.error(`Error al crear usuario: ${error.message}`);
+      if (error.code === 'auth/email-already-in-use') {
+        toast.error("Este número de teléfono ya está registrado en el sistema. Si fue eliminado recientemente, contacte al desarrollador.");
+      } else {
+        toast.error(`Error al crear usuario: ${error.message}`);
+      }
     } finally {
       setCreatingUser(false);
     }
@@ -369,6 +373,7 @@ export default function AdminMesaView() {
                             onChange={(e) => handleMenuChange(dateStr, 'almuerzo', 'principal', e.target.value)}
                             className="w-full bg-slate-900 border border-slate-600 text-white px-3 py-2 rounded focus:outline-none focus:border-yellow-500 text-sm"
                             placeholder="Ej: Milanesa con puré..."
+                            maxLength={100}
                           />
                         </div>
                         <div className="grid grid-cols-2 gap-3">
@@ -379,6 +384,7 @@ export default function AdminMesaView() {
                               onChange={(e) => handleMenuChange(dateStr, 'almuerzo', 'bebida', e.target.value)}
                               className="w-full bg-slate-900 border border-slate-600 text-white px-3 py-2 rounded focus:outline-none focus:border-yellow-500 text-sm"
                               placeholder="Ej: Jugo / Gaseosa"
+                              maxLength={100}
                             />
                           </div>
                           <div>
@@ -388,6 +394,7 @@ export default function AdminMesaView() {
                               onChange={(e) => handleMenuChange(dateStr, 'almuerzo', 'postre', e.target.value)}
                               className="w-full bg-slate-900 border border-slate-600 text-white px-3 py-2 rounded focus:outline-none focus:border-yellow-500 text-sm"
                               placeholder="Ej: Helado"
+                              maxLength={100}
                             />
                           </div>
                         </div>
@@ -401,6 +408,7 @@ export default function AdminMesaView() {
                             onChange={(e) => handleMenuChange(dateStr, 'cena', 'principal', e.target.value)}
                             className="w-full bg-slate-900 border border-slate-600 text-white px-3 py-2 rounded focus:outline-none focus:border-yellow-500 text-sm"
                             placeholder="Ej: Pollo al horno con papas..."
+                            maxLength={100}
                           />
                         </div>
                         <div className="grid grid-cols-2 gap-3">
@@ -411,6 +419,7 @@ export default function AdminMesaView() {
                               onChange={(e) => handleMenuChange(dateStr, 'cena', 'bebida', e.target.value)}
                               className="w-full bg-slate-900 border border-slate-600 text-white px-3 py-2 rounded focus:outline-none focus:border-yellow-500 text-sm"
                               placeholder="Ej: Jugo / Gaseosa"
+                              maxLength={100}
                             />
                           </div>
                           <div>
@@ -420,6 +429,7 @@ export default function AdminMesaView() {
                               onChange={(e) => handleMenuChange(dateStr, 'cena', 'postre', e.target.value)}
                               className="w-full bg-slate-900 border border-slate-600 text-white px-3 py-2 rounded focus:outline-none focus:border-yellow-500 text-sm"
                               placeholder="Ej: Fruta"
+                              maxLength={100}
                             />
                           </div>
                         </div>

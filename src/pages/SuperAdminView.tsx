@@ -7,11 +7,13 @@ import { Role } from '../types';
 import toast from 'react-hot-toast';
 import { handleFirestoreError, OperationType } from '../lib/firestoreErrors';
 import ExportPanel from '../components/ExportPanel';
+import DatabaseMaintenance from '../components/DatabaseMaintenance';
 
 export default function SuperAdminView() {
   const [users, setUsers] = useState<any[]>([]);
   const [loading, setLoading] = useState(false);
   const [actionLoading, setActionLoading] = useState<string | null>(null);
+  const [userToDelete, setUserToDelete] = useState<{id: string, name: string} | null>(null);
 
   useEffect(() => {
     setLoading(true);
@@ -41,11 +43,14 @@ export default function SuperAdminView() {
     }
   };
 
-  const handleDeleteUser = async (userId: string, userName: string) => {
-    if (!window.confirm(`¿Estás seguro de que deseas eliminar al usuario ${userName}? Esta acción eliminará también todas sus reservas y no se puede deshacer.`)) {
-      return;
-    }
+  const confirmDeleteUser = (userId: string, userName: string) => {
+    setUserToDelete({ id: userId, name: userName });
+  };
 
+  const executeDeleteUser = async () => {
+    if (!userToDelete) return;
+    const { id: userId, name: userName } = userToDelete;
+    
     setActionLoading(userId);
     try {
       // 1. Delete user document
@@ -70,11 +75,40 @@ export default function SuperAdminView() {
       handleFirestoreError(error, OperationType.DELETE, `users/${userId}`);
     } finally {
       setActionLoading(null);
+      setUserToDelete(null);
     }
   };
 
   return (
     <div className="space-y-6 px-4 sm:px-0 pb-10">
+      {/* Modal de Confirmación de Eliminación */}
+      {userToDelete && (
+        <div className="fixed inset-0 bg-slate-900/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <div className="bg-slate-800 rounded-lg border border-red-900/50 p-6 max-w-md w-full shadow-2xl">
+            <h3 className="text-xl font-bold text-white mb-2 flex items-center">
+              <ShieldAlert className="mr-2 text-red-500" /> Confirmar Eliminación
+            </h3>
+            <p className="text-slate-300 mb-6">
+              ¿Estás seguro de que deseas eliminar al usuario <strong className="text-white">{userToDelete.name}</strong>? Esta acción eliminará también todas sus reservas y no se puede deshacer.
+            </p>
+            <div className="flex justify-end gap-3">
+              <button 
+                onClick={() => setUserToDelete(null)}
+                className="px-4 py-2 text-slate-300 hover:text-white transition-colors font-medium"
+              >
+                Cancelar
+              </button>
+              <button 
+                onClick={executeDeleteUser}
+                className="px-4 py-2 bg-red-600 hover:bg-red-500 text-white rounded font-bold transition-colors shadow-lg shadow-red-900/20"
+              >
+                Eliminar Usuario
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       <div className="bg-slate-800 p-4 rounded-lg shadow-lg border border-red-900/50 flex items-center">
         <ShieldAlert className="mr-3 h-6 w-6 text-red-500" />
         <h2 className="text-xl font-bold text-white uppercase tracking-wider">
@@ -86,8 +120,11 @@ export default function SuperAdminView() {
         {/* Exportar Planillas */}
         <ExportPanel />
 
+        {/* Mantenimiento de Base de Datos */}
+        <DatabaseMaintenance />
+
         {/* Accesos Rápidos */}
-        <div className="bg-slate-800 rounded-lg shadow-lg border border-slate-700 overflow-hidden">
+        <div className="bg-slate-800 rounded-lg shadow-lg border border-slate-700 overflow-hidden md:col-span-2">
           <div className="bg-blue-950 px-6 py-4 border-b border-yellow-600/30 flex items-center">
             <ExternalLink className="mr-2 h-5 w-5 text-yellow-500" />
             <h3 className="text-lg font-bold text-white uppercase tracking-wider">Accesos Rápidos</h3>
@@ -177,7 +214,7 @@ export default function SuperAdminView() {
                         <option value="superadmin">Superadmin</option>
                       </select>
                       <button
-                        onClick={() => handleDeleteUser(user.id, user.name)}
+                        onClick={() => confirmDeleteUser(user.id, user.name)}
                         disabled={actionLoading === user.id}
                         className="p-2 text-red-400 hover:text-red-300 hover:bg-red-900/30 rounded transition-colors disabled:opacity-50"
                         title="Eliminar usuario"
@@ -225,7 +262,7 @@ export default function SuperAdminView() {
                     <option value="superadmin">Superadmin</option>
                   </select>
                   <button
-                    onClick={() => handleDeleteUser(user.id, user.name)}
+                    onClick={() => confirmDeleteUser(user.id, user.name)}
                     disabled={actionLoading === user.id}
                     className="p-2 text-red-400 hover:text-red-300 hover:bg-red-900/30 rounded border border-red-900/50 transition-colors disabled:opacity-50"
                   >

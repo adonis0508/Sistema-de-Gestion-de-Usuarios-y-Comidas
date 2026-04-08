@@ -167,8 +167,8 @@ service cloud.firestore {
                     request.resource.data.userId == request.auth.uid &&
                     request.resource.data.attended == false;
       
-      // Users can delete (cancel) their own reservations
-      allow delete: if isOwner(resource.data.userId);
+      // Users can delete (cancel) their own reservations. SuperAdmin can delete any (cascading delete).
+      allow delete: if isOwner(resource.data.userId) || isSuperAdmin();
       
       // Mozos can update the 'attended' status. They cannot change other fields.
       allow update: if isMozo() && 
@@ -190,11 +190,8 @@ service cloud.firestore {
       
       // Users can update readBy array to mark as read
       allow update: if isAuthenticated() && 
-                    isValidNotification(request.resource.data) &&
-                    request.resource.data.userId == resource.data.userId &&
-                    request.resource.data.title == resource.data.title &&
-                    request.resource.data.message == resource.data.message &&
-                    request.resource.data.createdAt == resource.data.createdAt;
+                    request.resource.data.diff(resource.data).affectedKeys().hasOnly(['readBy']) &&
+                    request.resource.data.readBy is list;
                     
       allow delete: if isSuperAdmin();
     }
